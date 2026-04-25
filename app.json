@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "SweatStreak",
+    "slug": "sweatstreak",
+    "scheme": "sweatstreak",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sweatstreak.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d0f0d"
+      },
+      "package": "com.sweatstreak.app",
+      "edgeToEdgeEnabled": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://10.156.226.141:5000"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

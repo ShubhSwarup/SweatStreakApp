@@ -1,0 +1,129 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSessionStore } from '../../store/sessionStore';
+import { useSessionTimer, formatElapsed } from '../../hooks/useSessionTimer';
+import { navigationRef } from '../../utils/navigation';
+import { colors } from '../../constants/colors';
+import { radii, spacing } from '../../constants/spacing';
+import { useNavigationState } from '@react-navigation/native';
+
+function getDeepRouteName(state: any): string {
+  if (!state) return '';
+  const route = state.routes[state.index];
+  if (route?.state) return getDeepRouteName(route.state);
+  return route?.name ?? '';
+}
+
+export default function SessionMiniBanner() {
+  const insets = useSafeAreaInsets();
+  const activeSession = useSessionStore(s => s.activeSession);
+  const currentRoute = useNavigationState(state => getDeepRouteName(state));
+
+  const isOnActiveSession = currentRoute === 'ActiveSession';
+  const elapsed = useSessionTimer(
+    activeSession?.durationSeconds ?? 0,
+    activeSession?.status === 'active',
+  );
+
+  if (!activeSession || isOnActiveSession) return null;
+
+  const handleTap = () => {
+    navigationRef.navigate('Main', { screen: 'WorkoutsTab', params: { screen: 'ActiveSession' } });
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.banner, { bottom: insets.bottom + 60 }]}
+      onPress={handleTap}
+      activeOpacity={0.85}
+    >
+      <View style={styles.left}>
+        <View
+          style={[
+            styles.statusDot,
+            activeSession.status === 'paused' && styles.statusDotPaused,
+          ]}
+        />
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>
+            {activeSession.name}
+          </Text>
+          <Text style={styles.status}>
+            {activeSession.status === 'paused' ? 'PAUSED' : 'ACTIVE'}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.right}>
+        <Text style={styles.timer}>{formatElapsed(elapsed)}</Text>
+        <Text style={styles.arrow}>›</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  banner: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    height: 56,
+    backgroundColor: colors.surfaceContainerHighest,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary,
+  },
+  statusDotPaused: {
+    backgroundColor: colors.warning,
+  },
+  info: {
+    flex: 1,
+    gap: 1,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  status: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 1,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  timer: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  arrow: {
+    fontSize: 18,
+    color: colors.textSecondary,
+    fontWeight: '300',
+  },
+});
