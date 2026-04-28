@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '../store/sessionStore';
 import type { MainTabParamList } from './types';
 import DashboardNavigator from './DashboardNavigator';
@@ -30,18 +31,6 @@ const tabBarStyle = {
   height: 60,
 };
 
-function TabDot({ active }: { active: boolean }) {
-  return (
-    <View
-      style={{
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: active ? colors.primary : colors.outlineVariant,
-      }}
-    />
-  );
-}
 
 function workoutsTabBarStyle(route: Parameters<typeof getFocusedRouteNameFromRoute>[0]) {
   return getFocusedRouteNameFromRoute(route) === 'ActiveSession'
@@ -89,7 +78,9 @@ export default function MainNavigator() {
           component={DashboardNavigator}
           options={{
             title: 'Dashboard',
-            tabBarIcon: ({ focused }) => <TabDot active={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+          ),
           }}
         />
         <Tab.Screen
@@ -98,7 +89,9 @@ export default function MainNavigator() {
           options={({ route }) => ({
             title: 'Workouts',
             tabBarStyle: workoutsTabBarStyle(route),
-            tabBarIcon: ({ focused }) => <TabDot active={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'barbell' : 'barbell-outline'} size={22} color={color} />
+            ),
           })}
         />
         <Tab.Screen
@@ -106,7 +99,9 @@ export default function MainNavigator() {
           component={ProgressNavigator}
           options={{
             title: 'Progress',
-            tabBarIcon: ({ focused }) => <TabDot active={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={22} color={color} />
+            ),
           }}
         />
         <Tab.Screen
@@ -114,7 +109,9 @@ export default function MainNavigator() {
           component={ProfileNavigator}
           options={{
             title: 'Profile',
-            tabBarIcon: ({ focused }) => <TabDot active={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+            ),
           }}
         />
       </Tab.Navigator>

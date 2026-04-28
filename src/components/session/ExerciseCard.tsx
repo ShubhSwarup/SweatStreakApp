@@ -12,6 +12,7 @@ import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
 import SetRow, { type LogSetData } from './SetRow';
 import type { SessionExercise } from '../../types/api';
+import { log } from '../../utils/logger';
 
 interface Props {
   exercise: SessionExercise;
@@ -41,15 +42,9 @@ export default function ExerciseCard({
       },
       onPanResponderRelease: (_e, { dx }) => {
         if (dx < -36) {
-          Animated.spring(translateX, {
-            toValue: -72,
-            useNativeDriver: true,
-          }).start();
+          Animated.spring(translateX, { toValue: -72, useNativeDriver: true }).start();
         } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
         }
       },
     }),
@@ -58,23 +53,16 @@ export default function ExerciseCard({
   const closeSwipe = () =>
     Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
 
-  const handleRemove = () => {
+  const handleRemoveExercise = () => {
     closeSwipe();
-    Alert.alert(
-      'Remove Exercise',
-      `Remove "${exercise.name}" from this workout?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => onRemove(exerciseIndex),
-        },
-      ],
-    );
+    const name = exercise.name || 'this exercise';
+    Alert.alert('Remove Exercise', `Remove "${name}" from this workout?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => onRemove(exerciseIndex) },
+    ]);
   };
 
-  const handleLogSet = async (data: LogSetData) => {
+  const handleLogPendingSet = async (data: LogSetData) => {
     setIsLoggingSet(true);
     try {
       await onLogSet(exerciseIndex, data);
@@ -83,17 +71,36 @@ export default function ExerciseCard({
     }
   };
 
+  const handleLogExtraSet = async (data: LogSetData) => {
+    setIsLoggingSet(true);
+    try {
+      await onLogSet(exerciseIndex, data);
+      setExtraSetCount(c => Math.max(0, c - 1));
+    } finally {
+      setIsLoggingSet(false);
+    }
+  };
+
+  const handleRemoveExtraSet = () => {
+    setExtraSetCount(c => Math.max(0, c - 1));
+  };
+
   const completedSets = exercise.sets.filter(s => s.completed);
   const incompleteSets = exercise.sets.filter(s => !s.completed);
-  const suggestedWeight = exercise.suggestion?.weight ?? exercise.lastPerformance?.weight ?? null;
-  const suggestedReps = exercise.suggestion?.reps ?? exercise.lastPerformance?.reps ?? null;
 
-  const totalSetCount = exercise.sets.length + extraSetCount;
+  const suggestedWeight =
+    exercise.suggestion?.weight ?? exercise.lastPerformance?.weight ?? null;
+  const suggestedReps =
+    exercise.suggestion?.reps ?? exercise.lastPerformance?.reps ?? null;
+
+  const displayName = exercise.name || 'Exercise';
+  if (!exercise.name) log.warn('ExerciseCard', 'exercise.name empty for exerciseId=%s', exercise.exerciseId);
+  const trackingLabel = exercise.trackingType?.toUpperCase() ?? 'REPS';
 
   return (
     <View style={styles.swipeContainer}>
-      {/* Delete button revealed on swipe */}
-      <TouchableOpacity style={styles.deleteBtn} onPress={handleRemove}>
+      {/* Delete backdrop */}
+      <TouchableOpacity style={styles.deleteBtn} onPress={handleRemoveExercise}>
         <Text style={styles.deleteBtnText}>Remove</Text>
       </TouchableOpacity>
 
@@ -104,13 +111,18 @@ export default function ExerciseCard({
         {/* Exercise header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.exerciseName}>{exercise.name}</Text>
+            <Text style={styles.exerciseName}>{displayName}</Text>
             <Text style={styles.muscleTag}>
-              {exercise.trackingType.toUpperCase()}
+              {trackingLabel}
               {exercise.lastPerformance && (
                 <>
                   {'  ·  LAST: '}
-                  {exercise.lastPerformance.weight}kg × {exercise.lastPerformance.reps}
+                  {exercise.lastPerformance.weight != null
+                    ? `${exercise.lastPerformance.weight} kg`
+                    : 'BW'}
+                  {exercise.lastPerformance.reps != null
+                    ? ` × ${exercise.lastPerformance.reps}`
+                    : ''}
                 </>
               )}
             </Text>
@@ -130,12 +142,12 @@ export default function ExerciseCard({
           )}
         </View>
 
-        {/* Set headers */}
+        {/* Set column headers */}
         <View style={styles.setHeaderRow}>
           <Text style={styles.setHeaderNum}>#</Text>
           {exercise.trackingType === 'reps' && (
             <>
-              <Text style={styles.setHeaderLabel}>WEIGHT</Text>
+              <Text style={styles.setHeaderLabel}>WEIGHT (kg)</Text>
               <Text style={styles.setHeaderLabel}>REPS</Text>
             </>
           )}
@@ -150,53 +162,61 @@ export default function ExerciseCard({
           </Text>
         </View>
 
-        {/* Completed sets */}
-        {completedSets.map(s => (
+        {/* Completed sets — read-only, positional # */}
+        {completedSets.map((s, idx) => (
           <SetRow
             key={`done-${s.setNumber}`}
-            setNumber={s.setNumber}
+            setNumber={idx + 1}
             set={s}
             trackingType={exercise.trackingType}
-            onComplete={handleLogSet}
+            onComplete={handleLogPendingSet}
           />
         ))}
 
-        {/* Incomplete (pre-populated) sets */}
-        {incompleteSets.map(s => (
+        {/* Pending sets — no remove button; backend always logs first incomplete */}
+        {incompleteSets.map((set, localIdx) => (
           <SetRow
-            key={`pending-${s.setNumber}`}
-            setNumber={s.setNumber}
-            set={s}
+            key={`pending-${set.setNumber}`}
+            setNumber={completedSets.length + localIdx + 1}
+            set={set}
             trackingType={exercise.trackingType}
             suggestedWeight={suggestedWeight}
             suggestedReps={suggestedReps}
-            onComplete={handleLogSet}
-            onOpenCalculator={exercise.trackingType === 'reps' ? onOpenCalculator : undefined}
+            onComplete={handleLogPendingSet}
+            onOpenCalculator={
+              exercise.trackingType === 'reps' ? onOpenCalculator : undefined
+            }
             isCompleting={isLoggingSet}
           />
         ))}
 
-        {/* User-added extra sets */}
-        {Array.from({ length: extraSetCount }, (_, i) => (
-          <SetRow
-            key={`extra-${i}`}
-            setNumber={completedSets.length + incompleteSets.length + i + 1}
-            set={null}
-            trackingType={exercise.trackingType}
-            suggestedWeight={suggestedWeight}
-            suggestedReps={suggestedReps}
-            onComplete={handleLogSet}
-            onOpenCalculator={exercise.trackingType === 'reps' ? onOpenCalculator : undefined}
-            isCompleting={isLoggingSet}
-          />
-        ))}
+        {/* User-added extra sets — removable; decrement count after logging */}
+        {Array.from({ length: extraSetCount }, (_, i) => {
+          const setNum = completedSets.length + incompleteSets.length + i + 1;
+          return (
+            <SetRow
+              key={`extra-${i}`}
+              setNumber={setNum}
+              set={null}
+              trackingType={exercise.trackingType}
+              suggestedWeight={suggestedWeight}
+              suggestedReps={suggestedReps}
+              onComplete={handleLogExtraSet}
+              onRemove={i === extraSetCount - 1 ? handleRemoveExtraSet : undefined}
+              onOpenCalculator={
+                exercise.trackingType === 'reps' ? onOpenCalculator : undefined
+              }
+              isCompleting={isLoggingSet}
+            />
+          );
+        })}
 
-        {/* Add set button */}
+        {/* Add set */}
         <TouchableOpacity
           style={styles.addSetBtn}
           onPress={() => setExtraSetCount(c => c + 1)}
         >
-          <Text style={styles.addSetText}>+ Set</Text>
+          <Text style={styles.addSetText}>+ Add Set</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

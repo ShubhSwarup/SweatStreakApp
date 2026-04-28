@@ -1,12 +1,13 @@
 export function formatSeconds(seconds: number): string {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
 }
 
 export function formatDuration(seconds: number): string {
-  if (seconds < 3600) return formatSeconds(seconds);
-  const h = Math.floor(seconds / 3600);
-  const remaining = seconds % 3600;
-  return `${h}h ${formatSeconds(remaining)}`;
+  const s = Math.floor(seconds);
+  if (s < 3600) return formatSeconds(s);
+  const h = Math.floor(s / 3600);
+  return `${h}h ${formatSeconds(s % 3600)}`;
 }

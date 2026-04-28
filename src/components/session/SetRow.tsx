@@ -24,6 +24,7 @@ interface Props {
   suggestedWeight?: number | null;
   suggestedReps?: number | null;
   onComplete: (data: LogSetData) => void;
+  onRemove?: () => void;
   onOpenCalculator?: (weight: number) => void;
   isCompleting?: boolean;
 }
@@ -35,6 +36,7 @@ export default function SetRow({
   suggestedWeight,
   suggestedReps,
   onComplete,
+  onRemove,
   onOpenCalculator,
   isCompleting = false,
 }: Props) {
@@ -52,35 +54,74 @@ export default function SetRow({
   const [distance, setDistance] = useState(
     set?.distance != null ? String(set.distance) : '',
   );
+  const [error, setError] = useState<string | null>(null);
 
-  // Pre-fill from suggestion if empty
+  // Pre-fill from suggestion once on mount
   useEffect(() => {
     if (!isCompleted) {
-      if (weight === '' && suggestedWeight != null) {
-        setWeight(String(suggestedWeight));
-      }
-      if (reps === '' && suggestedReps != null) {
-        setReps(String(suggestedReps));
-      }
+      if (weight === '' && suggestedWeight != null) setWeight(String(suggestedWeight));
+      if (reps === '' && suggestedReps != null) setReps(String(suggestedReps));
     }
-    // Only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleStep = (field: 'weight' | 'reps', step: number) => {
+    if (field === 'weight') {
+      const current = parseFloat(weight) || 0;
+      setWeight(Math.max(0.5, current + step).toString());
+    } else {
+      const current = parseInt(reps, 10) || 0;
+      setReps(Math.max(1, current + step).toString());
+    }
+    setError(null);
+  };
+
+  const validate = (): LogSetData | null => {
+    setError(null);
+    if (trackingType === 'reps') {
+      const r = reps.trim();
+      if (!r || isNaN(parseInt(r, 10)) || parseInt(r, 10) <= 0) {
+        setError('Enter reps to log this set');
+        return null;
+      }
+      const w = weight.trim();
+      const weightVal = w ? parseFloat(w) : undefined;
+      if (w && (isNaN(weightVal!) || weightVal! <= 0)) {
+        setError('Enter a valid weight');
+        return null;
+      }
+      return {
+        reps: parseInt(r, 10),
+        ...(weightVal !== undefined && weightVal > 0 ? { weight: weightVal } : {}),
+      };
+    }
+    if (trackingType === 'time') {
+      const d = durationSec.trim();
+      if (!d || isNaN(parseInt(d, 10)) || parseInt(d, 10) <= 0) {
+        setError('Enter duration in seconds');
+        return null;
+      }
+      return { durationSeconds: parseInt(d, 10) };
+    }
+    if (trackingType === 'distance') {
+      const dist = distance.trim();
+      if (!dist || isNaN(parseFloat(dist)) || parseFloat(dist) <= 0) {
+        setError('Enter distance in km');
+        return null;
+      }
+      return { distance: parseFloat(dist) };
+    }
+    return {};
+  };
+
   const handleComplete = () => {
     if (isCompleted || isCompleting) return;
-    const data: LogSetData = {};
-    if (trackingType === 'reps') {
-      if (weight) data.weight = parseFloat(weight);
-      if (reps) data.reps = parseInt(reps, 10);
-    } else if (trackingType === 'time') {
-      if (durationSec) data.durationSeconds = parseInt(durationSec, 10);
-    } else if (trackingType === 'distance') {
-      if (distance) data.distance = parseFloat(distance);
-    }
+    const data = validate();
+    if (!data) return;
     onComplete(data);
   };
 
+  // ── Completed row (read-only) ─────────────────────────────────────────────
   if (isCompleted && set) {
     return (
       <View style={styles.completedRow}>
@@ -88,7 +129,7 @@ export default function SetRow({
         <View style={styles.completedValues}>
           {trackingType === 'reps' && (
             <Text style={styles.completedText}>
-              {set.weight != null ? `${set.weight} kg` : '—'}
+              {set.weight != null ? `${set.weight} kg` : 'BW'}
               {'  ×  '}
               {set.reps != null ? `${set.reps} reps` : '—'}
               {set.isPR && <Text style={styles.prBadge}> PR</Text>}
@@ -112,76 +153,107 @@ export default function SetRow({
     );
   }
 
+  // ── Input row ─────────────────────────────────────────────────────────────
   return (
-    <View style={styles.inputRow}>
-      <Text style={styles.setNum}>{setNumber}</Text>
+    <View>
+      <View style={styles.inputRow}>
+          <Text style={styles.setNum}>{setNumber}</Text>
 
-      {trackingType === 'reps' && (
-        <>
-          <View style={styles.inputGroup}>
-            <TextInput
-              style={styles.input}
-              value={weight}
-              onChangeText={setWeight}
-              placeholder={suggestedWeight != null ? String(suggestedWeight) : 'kg'}
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-            />
-            {onOpenCalculator && (
-              <TouchableOpacity
-                style={styles.calcIcon}
-                onPress={() => onOpenCalculator(parseFloat(weight) || 0)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.calcIconText}>⊞</Text>
+        {trackingType === 'reps' && (
+          <>
+            <View style={[styles.inputGroup, error && styles.inputError]}>
+              <TouchableOpacity onPress={() => handleStep('weight', -2.5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Text style={styles.stepperIcon}>−</Text>
               </TouchableOpacity>
-            )}
-          </View>
+              <TextInput
+                style={[styles.input, { textAlign: 'center' }]}
+                value={weight}
+                onChangeText={v => { setWeight(v); setError(null); }}
+                placeholder={suggestedWeight != null ? String(suggestedWeight) : '0'}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                selectTextOnFocus
+              />
+              <TouchableOpacity onPress={() => handleStep('weight', 2.5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Text style={styles.stepperIcon}>+</Text>
+              </TouchableOpacity>
+              {onOpenCalculator && (
+                <TouchableOpacity
+                  style={styles.calcIcon}
+                  onPress={() => onOpenCalculator(parseFloat(weight) || 0)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.calcIconText}>⊞</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={[styles.inputGroup, error && styles.inputError]}>
+              <TouchableOpacity onPress={() => handleStep('reps', -1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Text style={styles.stepperIcon}>−</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.input, { textAlign: 'center' }]}
+                value={reps}
+                onChangeText={v => { setReps(v); setError(null); }}
+                placeholder={suggestedReps != null ? String(suggestedReps) : 'reps'}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                selectTextOnFocus
+              />
+              <TouchableOpacity onPress={() => handleStep('reps', 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Text style={styles.stepperIcon}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {trackingType === 'time' && (
           <TextInput
-            style={[styles.input, styles.repsInput]}
-            value={reps}
-            onChangeText={setReps}
-            placeholder={suggestedReps != null ? String(suggestedReps) : 'reps'}
+            style={[styles.input, styles.fullInput, error && styles.inputError]}
+            value={durationSec}
+            onChangeText={v => { setDurationSec(v); setError(null); }}
+            placeholder="seconds"
             placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
             selectTextOnFocus
           />
-        </>
-      )}
+        )}
 
-      {trackingType === 'time' && (
-        <TextInput
-          style={[styles.input, styles.fullInput]}
-          value={durationSec}
-          onChangeText={setDurationSec}
-          placeholder="seconds"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="number-pad"
-          selectTextOnFocus
-        />
-      )}
+        {trackingType === 'distance' && (
+          <TextInput
+            style={[styles.input, styles.fullInput, error && styles.inputError]}
+            value={distance}
+            onChangeText={v => { setDistance(v); setError(null); }}
+            placeholder="km"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            selectTextOnFocus
+          />
+        )}
 
-      {trackingType === 'distance' && (
-        <TextInput
-          style={[styles.input, styles.fullInput]}
-          value={distance}
-          onChangeText={setDistance}
-          placeholder="km"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="decimal-pad"
-          selectTextOnFocus
-        />
-      )}
+        <TouchableOpacity
+          style={[styles.checkBtn, isCompleting && styles.checkBtnDisabled]}
+          onPress={handleComplete}
+          disabled={isCompleting}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
+          <Text style={styles.checkBtnIcon}>{isCompleting ? '…' : '✓'}</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.checkBtn, isCompleting && styles.checkBtnDisabled]}
-        onPress={handleComplete}
-        disabled={isCompleting}
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-      >
-        <Text style={styles.checkBtnIcon}>{isCompleting ? '…' : '✓'}</Text>
-      </TouchableOpacity>
+        {onRemove && (
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={onRemove}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.removeBtnIcon}>−</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {error != null && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
     </View>
   );
 }
@@ -243,6 +315,20 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
   },
+  removeBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: `${colors.error}30`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnIcon: {
+    fontSize: 16,
+    color: colors.error,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
   inputGroup: {
     flex: 1,
     flexDirection: 'row',
@@ -250,6 +336,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.sm,
     paddingHorizontal: spacing.sm,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: colors.error,
   },
   input: {
     flex: 1,
@@ -281,6 +371,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
+  stepperIcon: {
+    fontSize: 18,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    paddingHorizontal: 4,
+  },
   checkBtn: {
     width: 40,
     height: 40,
@@ -296,5 +392,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.primary,
     fontWeight: '700',
+  },
+  errorText: {
+    fontSize: 11,
+    color: colors.error,
+    marginLeft: 30,
+    marginTop: 2,
+    marginBottom: 2,
   },
 });

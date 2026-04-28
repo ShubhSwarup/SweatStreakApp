@@ -25,6 +25,7 @@ import type { WorkoutsScreenProps } from '../../navigation/types';
 import type { LogSetData } from '../../components/session/SetRow';
 import type { PostSessionItem } from '../../store/uiStore';
 import { useFocusEffect } from '@react-navigation/native';
+import { log } from '../../utils/logger';
 
 function getLevel(totalXP: number): number {
   return Math.floor(Math.sqrt(totalXP / 50)) + 1;
@@ -38,7 +39,6 @@ export default function ActiveSessionScreen({
     isFinishing,
     fetchActiveSession,
     logSet,
-    addExercise,
     removeExercise,
     finishSession,
     pauseSession,
@@ -64,7 +64,7 @@ export default function ActiveSessionScreen({
     }
   }, []);
 
-  // Watch for pause: auto-navigate back to hub
+  // Navigate to hub when session transitions to paused
   useEffect(() => {
     const status = activeSession?.status ?? null;
     if (prevStatusRef.current === 'active' && status === 'paused') {
@@ -73,7 +73,7 @@ export default function ActiveSessionScreen({
     prevStatusRef.current = status;
   }, [activeSession?.status]);
 
-  // Block hardware back button on Android
+  // Block Android hardware back — show leave dialog instead
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -88,28 +88,37 @@ export default function ActiveSessionScreen({
     setLeaveDialogVisible(false);
     try {
       await pauseSession();
-      // useEffect watching status change navigates to WorkoutHub
-    } catch {
-      // error shown by store
+      // status-change effect handles navigation
+    } catch (err) {
+      log.error('ActiveSession', 'pause failed:', err);
+      // Navigate away anyway so the user isn't trapped
+      navigation.navigate('WorkoutHub');
     }
-  }, [pauseSession]);
+  }, [pauseSession, navigation]);
 
   const handleDiscardFromDialog = useCallback(async () => {
     setLeaveDialogVisible(false);
     try {
       await discardSession();
+    } catch (err) {
+      log.error('ActiveSession', 'discard failed:', err);
+    } finally {
+      // Always navigate — don't leave user stranded if the API fails
       navigation.navigate('WorkoutHub');
-    } catch {
-      // error shown by store
     }
   }, [discardSession, navigation]);
 
   const handleLogSet = useCallback(
     async (exerciseIndex: number, data: LogSetData) => {
-      await logSet(exerciseIndex, data);
-      const restSeconds =
-        activeSession?.exercises[exerciseIndex]?.restSeconds ?? 90;
-      openOverlay('restTimer', { restSeconds });
+      try {
+        await logSet(exerciseIndex, data);
+        const restSeconds =
+          activeSession?.exercises[exerciseIndex]?.restSeconds ?? 90;
+        openOverlay('restTimer', { restSeconds });
+      } catch (err) {
+        log.error('ActiveSession', 'logSet failed:', err);
+        Alert.alert('Error', 'Failed to log set. Please try again.');
+      }
     },
     [logSet, openOverlay, activeSession],
   );
@@ -123,7 +132,10 @@ export default function ActiveSessionScreen({
 
   const handleRemoveExercise = useCallback(
     (exerciseIndex: number) => {
-      removeExercise(exerciseIndex);
+      removeExercise(exerciseIndex).catch(err => {
+        log.error('ActiveSession', 'removeExercise failed:', err);
+        Alert.alert('Error', 'Could not remove exercise. Please try again.');
+      });
     },
     [removeExercise],
   );
@@ -133,7 +145,8 @@ export default function ActiveSessionScreen({
   }, [openOverlay]);
 
   const handleFinish = useCallback(() => {
-    if (!activeSession?.exercises.length) {
+    if (!activeSession) return;
+    if (!activeSession.exercises.length) {
       Alert.alert('Empty Workout', 'Add at least one exercise before finishing.');
       return;
     }
@@ -142,22 +155,34 @@ export default function ActiveSessionScreen({
 
   const handleFinishConfirm = useCallback(async () => {
     setFinishDialogVisible(false);
-    const sessionId = activeSession!.id;
+
+    // Snapshot before the async finish call clears activeSession
+    const session = activeSession;
+    if (!session?.id) {
+      log.error('ActiveSession', 'handleFinishConfirm: activeSession or id is missing', session);
+      Alert.alert('Error', 'Session data is missing. Please restart the app.');
+      return;
+    }
+
+    const sessionId = session.id;
     const exerciseNames: Record<string, string> = {};
-    activeSession!.exercises.forEach(ex => {
-      exerciseNames[ex.exerciseId] = ex.name;
+    session.exercises.forEach(ex => {
+      exerciseNames[ex.exerciseId] = ex.name ?? '';
     });
     const oldLevel = user ? getLevel(user.totalXP) : 1;
 
     try {
       const result = await finishSession();
-      if (!result) return;
+      if (!result) {
+        log.error('ActiveSession', 'finishSession returned null', null);
+        return;
+      }
 
-      const newLevel = getLevel(result.xp.total);
+      const newLevel = getLevel(result.xp?.total ?? 0);
       const leveledUp = newLevel > oldLevel;
 
       const queue: PostSessionItem[] = [];
-      if (result.personalRecords.length > 0) queue.push('prCelebration');
+      if ((result.personalRecords?.length ?? 0) > 0) queue.push('prCelebration');
       if (leveledUp) queue.push('xpLevelUp');
       queue.push('sessionSummary');
 
@@ -171,7 +196,9 @@ export default function ActiveSessionScreen({
       });
       setPostSessionQueue(queue);
       advancePostSessionQueue();
-    } catch {
+      navigation.navigate('WorkoutHub');
+    } catch (err) {
+      log.error('ActiveSession', 'finishSession failed:', err);
       Alert.alert('Error', 'Failed to finish session. Please try again.');
     }
   }, [
@@ -198,6 +225,13 @@ export default function ActiveSessionScreen({
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.leaveBtn}
+          onPress={() => setLeaveDialogVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.leaveBtnText}>←</Text>
+        </TouchableOpacity>
         <View style={styles.headerLeft}>
           <Text style={styles.sessionName} numberOfLines={1}>
             {activeSession.name}
@@ -211,6 +245,11 @@ export default function ActiveSessionScreen({
             />
             <Text style={styles.statusText}>
               {activeSession.status === 'paused' ? 'PAUSED' : 'ACTIVE'}
+            </Text>
+            <Text style={styles.exerciseCount}>
+              {activeSession.exercises.length > 0
+                ? ` · ${activeSession.exercises.length} exercise${activeSession.exercises.length !== 1 ? 's' : ''}`
+                : ''}
             </Text>
           </View>
         </View>
@@ -234,7 +273,7 @@ export default function ActiveSessionScreen({
         {activeSession.exercises.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No exercises yet</Text>
-            <Text style={styles.emptySub}>Tap "Add Exercise" to get started</Text>
+            <Text style={styles.emptySub}>Tap "+ Add Exercise" to get started</Text>
           </View>
         )}
 
@@ -252,13 +291,14 @@ export default function ActiveSessionScreen({
         <TouchableOpacity
           style={styles.addExerciseBtn}
           onPress={handleAddExercise}
+          activeOpacity={0.8}
         >
           <Text style={styles.addExerciseIcon}>+</Text>
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Finish button */}
+      {/* Footer */}
       <View style={styles.footer}>
         <Button
           label={isFinishing ? 'Saving…' : 'Finish Workout'}
@@ -268,7 +308,7 @@ export default function ActiveSessionScreen({
         />
       </View>
 
-      {/* Leave Workout dialog */}
+      {/* Leave dialog */}
       <LeaveWorkoutDialog
         visible={leaveDialogVisible}
         onStay={() => setLeaveDialogVisible(false)}
@@ -276,12 +316,13 @@ export default function ActiveSessionScreen({
         onDiscard={handleDiscardFromDialog}
       />
 
-      {/* Finish Workout confirmation */}
+      {/* Finish confirmation */}
       <Modal
         visible={finishDialogVisible}
         transparent
         animationType="fade"
         statusBarTranslucent
+        onRequestClose={() => setFinishDialogVisible(false)}
       >
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmDialog}>
@@ -323,8 +364,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
   },
-
-  // Loading
   loading: {
     flex: 1,
     alignItems: 'center',
@@ -375,8 +414,23 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 1.2,
   },
+  exerciseCount: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  leaveBtn: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  leaveBtnText: {
+    fontSize: 20,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
   menuBtn: {
     paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   menuIcon: {
     fontSize: 16,
@@ -386,16 +440,14 @@ const styles = StyleSheet.create({
   },
 
   // Scroll
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
     padding: spacing.lg,
     paddingBottom: spacing['4xl'],
     gap: spacing.xs,
   },
 
-  // Empty state
+  // Empty
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing['4xl'],
@@ -442,7 +494,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.outlineVariant,
   },
 
-  // Confirm overlay (Finish dialog)
+  // Finish confirm
   confirmOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

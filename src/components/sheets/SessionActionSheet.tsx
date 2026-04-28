@@ -1,6 +1,13 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ActivityIndicator } from 'react-native';
-import BottomSheet from '@gorhom/bottom-sheet';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
 import { useUIStore } from '../../store/uiStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { navigationRef } from '../../utils/navigation';
@@ -10,21 +17,26 @@ import { radii, spacing } from '../../constants/spacing';
 export default function SessionActionSheet() {
   const { activeOverlay, closeOverlay } = useUIStore();
   const { activeSession, pauseSession, discardSession } = useSessionStore();
-  const sheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['30%'], []);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
 
   const isVisible = activeOverlay === 'sessionAction';
   const isPaused = activeSession?.status === 'paused';
 
   const handlePause = async () => {
+    setIsPausing(true);
     try {
       await pauseSession();
       closeOverlay();
-      navigationRef.navigate('Main', { screen: 'WorkoutsTab', params: { screen: 'WorkoutHub' } });
-    } catch {
-      // error shown by store
+      navigationRef.navigate('Main', {
+        screen: 'WorkoutsTab',
+        params: { screen: 'WorkoutHub' },
+      });
+    } catch (err) {
+      console.error('[SessionActionSheet] pauseSession failed:', err);
+    } finally {
+      setIsPausing(false);
     }
   };
 
@@ -32,57 +44,85 @@ export default function SessionActionSheet() {
     setIsDiscarding(true);
     try {
       await discardSession();
+    } catch (err) {
+      console.error('[SessionActionSheet] discardSession failed:', err);
+    } finally {
+      setIsDiscarding(false);
       setDiscardConfirmVisible(false);
       closeOverlay();
-      navigationRef.navigate('Main', { screen: 'DashboardTab', params: { screen: 'Dashboard' } });
-    } catch {
-      setIsDiscarding(false);
+      navigationRef.navigate('Main', {
+        screen: 'DashboardTab',
+        params: { screen: 'Dashboard' },
+      });
     }
   };
 
-  if (!isVisible) return null;
-
   return (
     <>
-      <BottomSheet
-        ref={sheetRef}
-        index={0}
-        snapPoints={snapPoints}
-        enablePanDownToClose
-        onClose={closeOverlay}
-        backgroundStyle={styles.sheetBg}
-        handleIndicatorStyle={styles.handle}
+      {/* Action sheet */}
+      <Modal
+        visible={isVisible && !discardConfirmVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={closeOverlay}
       >
-        <View style={styles.content}>
-          <Text style={styles.title}>{activeSession?.name ?? 'Workout'}</Text>
+        <Pressable style={styles.backdrop} onPress={closeOverlay}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>{activeSession?.name ?? 'Workout'}</Text>
 
-          {!isPaused && (
-            <TouchableOpacity style={styles.actionBtn} onPress={handlePause}>
-              <Text style={styles.actionIcon}>⏸</Text>
+            {!isPaused && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handlePause}
+                disabled={isPausing}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.actionIcon}>⏸</Text>
+                <View style={styles.actionText}>
+                  <Text style={styles.actionLabel}>
+                    {isPausing ? 'Pausing…' : 'Pause Workout'}
+                  </Text>
+                  <Text style={styles.actionSub}>Resume from any tab</Text>
+                </View>
+                {isPausing && <ActivityIndicator color={colors.primary} size="small" />}
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.destructiveBtn]}
+              onPress={() => setDiscardConfirmVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionIcon}>🗑</Text>
               <View style={styles.actionText}>
-                <Text style={styles.actionLabel}>Pause Workout</Text>
-                <Text style={styles.actionSub}>Resume from any tab</Text>
+                <Text style={[styles.actionLabel, styles.destructiveLabel]}>
+                  Discard Workout
+                </Text>
+                <Text style={styles.actionSub}>Not saved to stats</Text>
               </View>
             </TouchableOpacity>
-          )}
 
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.destructiveBtn]}
-            onPress={() => setDiscardConfirmVisible(true)}
-          >
-            <Text style={styles.actionIcon}>🗑</Text>
-            <View style={styles.actionText}>
-              <Text style={[styles.actionLabel, styles.destructiveLabel]}>
-                Discard Workout
-              </Text>
-              <Text style={styles.actionSub}>Not saved to stats</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </BottomSheet>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={closeOverlay}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
-      {/* Themed discard confirmation */}
-      <Modal visible={discardConfirmVisible} transparent animationType="fade" statusBarTranslucent>
+      {/* Discard confirmation */}
+      <Modal
+        visible={discardConfirmVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setDiscardConfirmVisible(false)}
+      >
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmDialog}>
             <Text style={styles.confirmTitle}>Discard Workout?</Text>
@@ -91,12 +131,12 @@ export default function SessionActionSheet() {
             </Text>
             <View style={styles.confirmActions}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={styles.confirmCancelBtn}
                 onPress={() => setDiscardConfirmVisible(false)}
                 disabled={isDiscarding}
                 activeOpacity={0.75}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmDiscardBtn}
@@ -119,13 +159,27 @@ export default function SessionActionSheet() {
 }
 
 const styles = StyleSheet.create({
-  sheetBg: { backgroundColor: colors.surfaceContainerHigh },
-  handle: { backgroundColor: colors.outlineVariant, width: 36 },
-  content: {
+  backdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.surfaceContainerHigh,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
+    paddingBottom: spacing['3xl'],
     gap: spacing.sm,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.outlineVariant,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
   },
   title: {
     fontSize: 13,
@@ -166,6 +220,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
+  cancelBtn: {
+    height: 52,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
 
   // Confirm dialog
   confirmOverlay: {
@@ -199,7 +266,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  cancelBtn: {
+  confirmCancelBtn: {
     flex: 1,
     height: 52,
     borderRadius: radii.lg,
@@ -207,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelText: {
+  confirmCancelText: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.textSecondary,

@@ -6,7 +6,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+
+    "platforms": ["ios", "android"],
+
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sweatstreak.app"
@@ -19,7 +21,7 @@
       "edgeToEdgeEnabled": true
     },
     "extra": {
-      "apiBaseUrl": "http://10.156.226.141:5000"
+      "apiBaseUrl": "https://sweatstreak-backend.onrender.com"
     },
     "plugins": [
       "expo-font"

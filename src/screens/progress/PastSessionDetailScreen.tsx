@@ -87,8 +87,8 @@ function ExerciseSection({ exercise, sessionPRs }: {
       <View style={styles.exerciseSummary}>
         <Text style={styles.exerciseSummaryText}>
           {completedSets.length} sets
-          {exercise.summary.bestWeight > 0 && ` · Best: ${exercise.summary.bestWeight} kg × ${exercise.summary.bestReps}`}
-          {exercise.summary.volume > 0 && ` · ${formatVolume(exercise.summary.volume)}`}
+          {(exercise.summary?.bestWeight ?? 0) > 0 && ` · Best: ${exercise.summary.bestWeight} kg × ${exercise.summary.bestReps}`}
+          {(exercise.summary?.volume ?? 0) > 0 && ` · ${formatVolume(exercise.summary.volume)}`}
         </Text>
       </View>
 
