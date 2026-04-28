@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { navigationRef } from '../../utils/navigation';
 import { useSessionStore } from '../../store/sessionStore';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
+import SharePreviewScreen, { type ShareData, type ShareTemplate } from '../share/SharePreviewScreen';
 
 function formatDuration(seconds: number): string {
   const t = Math.floor(seconds);
@@ -24,7 +25,21 @@ function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
+function levelLabel(level: number): string {
+  if (level >= 30) return 'ELITE';
+  if (level >= 20) return 'ADVANCED';
+  if (level >= 10) return 'INTERMEDIATE';
+  return 'BEGINNER';
+}
+
+function formatShareDate(now = new Date()): string {
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+
 export default function SessionSummaryModal() {
+  const [shareVisible, setShareVisible] = useState(false);
+
   const { activeOverlay, postSessionData, advancePostSessionQueue, clearPostSessionData } =
     useUIStore();
   const { clearFinishResult } = useSessionStore();
@@ -32,8 +47,32 @@ export default function SessionSummaryModal() {
 
   if (!isVisible || !postSessionData) return null;
 
-  const { finishResult, sessionId } = postSessionData;
+  const { finishResult, sessionId, exerciseNames } = postSessionData;
   const { summary, xp, streak, personalRecords, message } = finishResult;
+
+  const hasPRs = personalRecords.length > 0;
+  const isHighIntensity = summary.totalSets > 20 || summary.totalVolume > 5000;
+
+  // Default template: overlay when there's a PR, session card for high-intensity, else PR card
+  const defaultTemplate: ShareTemplate = hasPRs ? 'overlay' : isHighIntensity ? 'session' : 'pr';
+
+  // First weight/1rm PR is most meaningful to feature
+  const firstPR = personalRecords.find(pr => pr.type === 'weight' || pr.type === '1rm') ?? personalRecords[0];
+
+const shareData: ShareData = {
+  volume:       summary.totalVolume,
+  sets:         summary.totalSets,
+  duration:     Math.round(summary.duration / 60),
+  streak:       streak.current,
+  intensity:    isHighIntensity,
+  date:         formatShareDate(),
+  level:        levelLabel(postSessionData.newLevel),
+  prExercise:   firstPR ? (exerciseNames[firstPR.exercise] ?? firstPR.exercise) : 'WORKOUT',
+  prType:       firstPR?.type ?? 'weight',
+  prNewValue:   firstPR?.value ?? 0,
+  workoutName:  'WORKOUT',
+  muscleGroup:  'FULL BODY',
+};
 
   const dismiss = () => {
     advancePostSessionQueue();
@@ -108,23 +147,44 @@ export default function SessionSummaryModal() {
 
           {/* Footer CTAs */}
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={handleViewDetails}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryBtnText}>View Details</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={handleDone}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.primaryBtnText}>Done</Text>
-            </TouchableOpacity>
+            <View style={styles.footerRow}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={handleViewDetails}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryBtnText}>View Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleDone}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            {shareData && (
+              <TouchableOpacity
+                style={styles.sharePRBtn}
+                onPress={() => setShareVisible(true)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.sharePRBtnText}>🏆 Share PR Card</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Animated.View>
       </View>
+
+      {shareData && (
+        <SharePreviewScreen
+          visible={shareVisible}
+          onClose={() => setShareVisible(false)}
+          shareData={shareData}
+          defaultTemplate={defaultTemplate}
+        />
+      )}
     </Modal>
   );
 }
@@ -256,10 +316,14 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: spacing.sm,
     paddingHorizontal: spacing['2xl'],
     paddingTop: spacing.md,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   secondaryBtn: {
     flex: 1,
@@ -286,5 +350,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: colors.onPrimary,
+  },
+  sharePRBtn: {
+    height: 44,
+    borderRadius: radii.lg,
+    backgroundColor: `${colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sharePRBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3,
   },
 });

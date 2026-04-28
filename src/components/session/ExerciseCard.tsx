@@ -167,7 +167,7 @@ export default function ExerciseCard({
           ))}
         </View>
 
-        {/* Set column headers */}
+        {/* Set column headers — widths must mirror the SetRow layout constants */}
         <View style={styles.setHeaderRow}>
           <Text style={styles.setHeaderNum}>#</Text>
           {exercise.trackingType === 'reps' && (
@@ -182,9 +182,8 @@ export default function ExerciseCard({
           {exercise.trackingType === 'distance' && (
             <Text style={styles.setHeaderLabel}>DISTANCE (km)</Text>
           )}
-          <Text style={[styles.setHeaderLabel, { width: 40, textAlign: 'center' }]}>
-            DONE
-          </Text>
+          {/* 52px mirrors CHECK_SIZE so "DONE" sits above the ✓ button */}
+          <Text style={styles.setHeaderDone}>DONE</Text>
         </View>
 
         {/* Completed sets — read-only, positional # */}
@@ -259,14 +258,14 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: 72,
+    width: 80,
     backgroundColor: colors.error,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   deleteBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
@@ -274,8 +273,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.xs,
+    padding: 20,
+    gap: 2,
   },
 
   // Header
@@ -288,36 +287,36 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   exerciseName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: colors.text,
   },
   muscleTag: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
     color: colors.textMuted,
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   volumeSummary: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   suggestionBadge: {
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   suggestionIncrease: {
     backgroundColor: `${colors.primary}22`,
   },
   suggestionText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
@@ -326,29 +325,30 @@ const styles = StyleSheet.create({
   // Progress dots
   progressDotsRow: {
     flexDirection: 'row',
-    gap: 5,
-    paddingVertical: 4,
+    gap: 6,
+    paddingVertical: 6,
   },
   progressDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.outlineVariant,
   },
   progressDotActive: {
     backgroundColor: colors.primary,
   },
 
-  // Set headers
+  // Set headers — widths must mirror SetRow layout constants (SET_NUM_W=28, CHECK_SIZE=52)
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingBottom: 4,
+    paddingBottom: 6,
+    paddingTop: 4,
   },
   setHeaderNum: {
-    width: 22,
-    fontSize: 9,
+    width: 28,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.textMuted,
     letterSpacing: 0.5,
@@ -356,20 +356,32 @@ const styles = StyleSheet.create({
   },
   setHeaderLabel: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.textMuted,
     letterSpacing: 0.5,
   },
+  // Mirrors CHECK_SIZE (52px) so "DONE" sits directly above the ✓ button
+  setHeaderDone: {
+    width: 52,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
 
   // Add set
   addSetBtn: {
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+    height: 48,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surfaceContainerHighest,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   addSetText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
