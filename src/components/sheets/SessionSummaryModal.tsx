@@ -15,9 +15,10 @@ import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
 
 function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
+  const t = Math.floor(seconds);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s > 0 ? `${s}s` : ''}`.trim();
   return `${s}s`;

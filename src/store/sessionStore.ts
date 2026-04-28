@@ -37,6 +37,7 @@ interface SessionActions {
     restSeconds?: number,
   ) => Promise<void>;
   removeExercise: (exerciseIndex: number) => Promise<void>;
+  removePendingSet: (exerciseIndex: number, setNumber: number) => Promise<void>;
   pauseSession: () => Promise<void>;
   resumeSession: () => Promise<void>;
   discardSession: () => Promise<void>;
@@ -155,6 +156,22 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
     } catch (err: any) {
       log.error('SessionStore', 'removeExercise failed (index=%d):', exerciseIndex, err);
       set({ error: err?.message ?? 'Failed to remove exercise' });
+      throw err;
+    }
+  },
+
+  removePendingSet: async (exerciseIndex, setNumber) => {
+    const id = sessionId(get());
+    if (!id) {
+      set({ error: 'No active session' });
+      return;
+    }
+    try {
+      const updated = await sessionsApi.removeSet(id, exerciseIndex, setNumber);
+      set({ activeSession: updated });
+    } catch (err: any) {
+      log.error('SessionStore', `removePendingSet failed (exercise=${exerciseIndex}, set=${setNumber}):`, err);
+      set({ error: err?.message ?? 'Failed to remove set' });
       throw err;
     }
   },

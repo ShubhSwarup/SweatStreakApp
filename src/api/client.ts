@@ -5,7 +5,7 @@ import { triggerLogout } from '../utils/authEvents';
 import { log } from '../utils/logger';
 
 // Read base URL from app.json → expo.extra.apiBaseUrl, fall back to hardcoded IP.
-// export const BASE_URL = 'http://192.168.0.104:5000';
+export const BASE_URL = 'http://192.168.0.104:5000';
 // export const BASE_URL = 'http://10.156.227.15:5000';
 
 
@@ -13,8 +13,8 @@ import { log } from '../utils/logger';
 //   (Constants.expoConfig?.extra?.apiBaseUrl as string) ??
 //   'http://192.168.0.104:500';
 
-  export const BASE_URL = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
-  'http://10.156.227.15:5000';
+  // export const BASE_URL = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
+  // 'http://10.156.227.15:5000';
 
 log.info('API', 'client init', { baseURL: BASE_URL });
 

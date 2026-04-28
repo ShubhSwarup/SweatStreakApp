@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
 import type { SessionSet } from '../../types/api';
@@ -56,6 +58,10 @@ export default function SetRow({
   );
   const [error, setError] = useState<string | null>(null);
 
+  // Animations
+  const checkScale = useRef(new Animated.Value(1)).current;
+  const rowOpacity = useRef(new Animated.Value(isCompleted ? 1 : 0)).current;
+
   // Pre-fill from suggestion once on mount
   useEffect(() => {
     if (!isCompleted) {
@@ -65,7 +71,15 @@ export default function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fade in completed row when it first appears
+  useEffect(() => {
+    if (isCompleted) {
+      Animated.timing(rowOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+    }
+  }, [isCompleted, rowOpacity]);
+
   const handleStep = (field: 'weight' | 'reps', step: number) => {
+    Haptics.selectionAsync();
     if (field === 'weight') {
       const current = parseFloat(weight) || 0;
       setWeight(Math.max(0.5, current + step).toString());
@@ -117,14 +131,22 @@ export default function SetRow({
   const handleComplete = () => {
     if (isCompleted || isCompleting) return;
     const data = validate();
-    if (!data) return;
+    if (!data) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Animated.sequence([
+      Animated.spring(checkScale, { toValue: 1.35, useNativeDriver: true, speed: 40, bounciness: 8 }),
+      Animated.spring(checkScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 0 }),
+    ]).start();
     onComplete(data);
   };
 
   // ── Completed row (read-only) ─────────────────────────────────────────────
   if (isCompleted && set) {
     return (
-      <View style={styles.completedRow}>
+      <Animated.View style={[styles.completedRow, { opacity: rowOpacity }]}>
         <Text style={styles.setNumCompleted}>{setNumber}</Text>
         <View style={styles.completedValues}>
           {trackingType === 'reps' && (
@@ -149,7 +171,7 @@ export default function SetRow({
         <View style={styles.checkDone}>
           <Text style={styles.checkIcon}>✓</Text>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -157,7 +179,7 @@ export default function SetRow({
   return (
     <View>
       <View style={styles.inputRow}>
-          <Text style={styles.setNum}>{setNumber}</Text>
+        <Text style={styles.setNum}>{setNumber}</Text>
 
         {trackingType === 'reps' && (
           <>
@@ -231,14 +253,16 @@ export default function SetRow({
           />
         )}
 
-        <TouchableOpacity
-          style={[styles.checkBtn, isCompleting && styles.checkBtnDisabled]}
-          onPress={handleComplete}
-          disabled={isCompleting}
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-        >
-          <Text style={styles.checkBtnIcon}>{isCompleting ? '…' : '✓'}</Text>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+          <TouchableOpacity
+            style={[styles.checkBtn, isCompleting && styles.checkBtnDisabled]}
+            onPress={handleComplete}
+            disabled={isCompleting}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Text style={styles.checkBtnIcon}>{isCompleting ? '…' : '✓'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
         {onRemove && (
           <TouchableOpacity

@@ -40,6 +40,7 @@ export default function ActiveSessionScreen({
     fetchActiveSession,
     logSet,
     removeExercise,
+    removePendingSet,
     finishSession,
     pauseSession,
     discardSession,
@@ -285,6 +286,7 @@ export default function ActiveSessionScreen({
             onLogSet={handleLogSet}
             onOpenCalculator={handleOpenCalculator}
             onRemove={handleRemoveExercise}
+            onRemovePendingSet={(setNumber) => removePendingSet(idx, setNumber)}
           />
         ))}
 

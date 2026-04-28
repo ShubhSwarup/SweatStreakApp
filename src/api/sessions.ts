@@ -93,6 +93,20 @@ export async function removeExerciseFromSession(
   return normalizeSession(data.data);
 }
 
+export async function removeSet(
+  sessionId: string,
+  exerciseIndex: number,
+  setNumber: number,
+): Promise<ActiveSession> {
+  if (!sessionId || sessionId === 'undefined') {
+    throw new Error('removeSet called with invalid sessionId');
+  }
+  const { data } = await client.delete(
+    `/api/sessions/${sessionId}/exercises/${exerciseIndex}/sets/${setNumber}`,
+  );
+  return normalizeSession(data.data);
+}
+
 export async function pauseSession(sessionId: string): Promise<ActiveSession> {
   if (!sessionId || sessionId === 'undefined') {
     throw new Error('pauseSession called with invalid sessionId');

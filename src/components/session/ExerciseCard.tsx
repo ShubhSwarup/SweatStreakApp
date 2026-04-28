@@ -8,6 +8,7 @@ import {
   PanResponder,
   Alert,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
 import SetRow, { type LogSetData } from './SetRow';
@@ -20,6 +21,7 @@ interface Props {
   onLogSet: (exerciseIndex: number, data: LogSetData) => Promise<void>;
   onOpenCalculator: (weight: number) => void;
   onRemove: (exerciseIndex: number) => void;
+  onRemovePendingSet: (setNumber: number) => Promise<void>;
 }
 
 export default function ExerciseCard({
@@ -28,6 +30,7 @@ export default function ExerciseCard({
   onLogSet,
   onOpenCalculator,
   onRemove,
+  onRemovePendingSet,
 }: Props) {
   const [isLoggingSet, setIsLoggingSet] = useState(false);
   const [extraSetCount, setExtraSetCount] = useState(0);
@@ -42,6 +45,7 @@ export default function ExerciseCard({
       },
       onPanResponderRelease: (_e, { dx }) => {
         if (dx < -36) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           Animated.spring(translateX, { toValue: -72, useNativeDriver: true }).start();
         } else {
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
@@ -88,6 +92,11 @@ export default function ExerciseCard({
   const completedSets = exercise.sets.filter(s => s.completed);
   const incompleteSets = exercise.sets.filter(s => !s.completed);
 
+  const totalVolume = completedSets.reduce((acc, s) => {
+    if (s.weight != null && s.reps != null) return acc + s.weight * s.reps;
+    return acc;
+  }, 0);
+
   const suggestedWeight =
     exercise.suggestion?.weight ?? exercise.lastPerformance?.weight ?? null;
   const suggestedReps =
@@ -126,6 +135,12 @@ export default function ExerciseCard({
                 </>
               )}
             </Text>
+            {completedSets.length > 0 && (
+              <Text style={styles.volumeSummary}>
+                {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'} done
+                {totalVolume > 0 ? ` · ${totalVolume.toFixed(0)} kg total` : ''}
+              </Text>
+            )}
           </View>
           {exercise.suggestion && (
             <View
@@ -140,6 +155,16 @@ export default function ExerciseCard({
               </Text>
             </View>
           )}
+        </View>
+
+        {/* Progress dots */}
+        <View style={styles.progressDotsRow}>
+          {exercise.sets.map((s, i) => (
+            <View
+              key={i}
+              style={[styles.progressDot, s.completed && styles.progressDotActive]}
+            />
+          ))}
         </View>
 
         {/* Set column headers */}
@@ -173,7 +198,7 @@ export default function ExerciseCard({
           />
         ))}
 
-        {/* Pending sets — no remove button; backend always logs first incomplete */}
+        {/* Pending sets — removable via backend DELETE */}
         {incompleteSets.map((set, localIdx) => (
           <SetRow
             key={`pending-${set.setNumber}`}
@@ -183,6 +208,7 @@ export default function ExerciseCard({
             suggestedWeight={suggestedWeight}
             suggestedReps={suggestedReps}
             onComplete={handleLogPendingSet}
+            onRemove={() => onRemovePendingSet(set.setNumber)}
             onOpenCalculator={
               exercise.trackingType === 'reps' ? onOpenCalculator : undefined
             }
@@ -275,6 +301,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.6,
   },
+  volumeSummary: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.4,
+  },
   suggestionBadge: {
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.full,
@@ -289,6 +321,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
+  },
+
+  // Progress dots
+  progressDotsRow: {
+    flexDirection: 'row',
+    gap: 5,
+    paddingVertical: 4,
+  },
+  progressDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.outlineVariant,
+  },
+  progressDotActive: {
+    backgroundColor: colors.primary,
   },
 
   // Set headers
