@@ -1,6 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { colors } from '../../constants/colors';
 import { radii } from '../../constants/spacing';
 
@@ -12,15 +19,15 @@ export interface PRCardProps {
   oldValue?: number;
   volume: number;
   sets: number;
-  duration: number;   // minutes
+  duration: number;
   streak: number;
   intensity: boolean;
-  date: string;       // "APR 28, 2026"
+  date: string;
+  showBranding?: boolean;
 }
 
-// 9:16 Stories aspect ratio — capture at native pixel density
 export const CARD_W = 320;
-export const CARD_H = Math.round(CARD_W * 16 / 9); // 569
+export const CARD_H = Math.round((CARD_W * 16) / 9);
 
 function formatHeroStat(prType: PRCardProps['prType'], newValue: number, newReps?: number): string {
   switch (prType) {
@@ -40,12 +47,18 @@ function formatHeroStat(prType: PRCardProps['prType'], newValue: number, newReps
 
 function prTypeLabel(prType: PRCardProps['prType']): string {
   switch (prType) {
-    case 'weight': return 'WEIGHT PR';
-    case '1rm':    return '1RM PR';
-    case 'volume': return 'VOLUME PR';
-    case 'distance': return 'DISTANCE PR';
-    case 'time':   return 'TIME PR';
-    default:       return 'PR';
+    case 'weight':
+      return 'WEIGHT PR';
+    case '1rm':
+      return '1RM PR';
+    case 'volume':
+      return 'VOLUME PR';
+    case 'distance':
+      return 'DISTANCE PR';
+    case 'time':
+      return 'TIME PR';
+    default:
+      return 'PR';
   }
 }
 
@@ -61,60 +74,98 @@ export default function PRCard({
   streak,
   intensity,
   date,
+  showBranding = true,
 }: PRCardProps) {
   const improvement = oldValue != null ? +(newValue - oldValue).toFixed(1) : null;
   const heroText = formatHeroStat(prType, newValue, newReps);
   const unitLabel = prTypeLabel(prType);
 
+  const heroPulse = useSharedValue(0);
+  const glowPulse = useSharedValue(0);
+
+  React.useEffect(() => {
+    heroPulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    glowPulse.value = withRepeat(
+      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [glowPulse, heroPulse]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: 0.1 + glowPulse.value * 0.1,
+  }));
+
+  const heroPulseStyle = useAnimatedStyle(() => ({
+    opacity: 0.2 + heroPulse.value * 0.35,
+  }));
+
   return (
     <View style={styles.card}>
-      {/* Background glow — top-right accent */}
-      <LinearGradient
-        colors={[`${colors.primary}20`, 'transparent']}
-        style={styles.glowTopRight}
-        start={{ x: 1, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      />
-      {/* Bottom glow — warm */}
-      <LinearGradient
-        colors={['transparent', `${colors.secondary}10`]}
-        style={styles.glowBottomLeft}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      <Animated.View style={[styles.glowTopRight, glowStyle]}>
+        <LinearGradient
+          colors={[`${colors.primary}32`, 'transparent']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+      </Animated.View>
 
-      {/* ── TOP 10% — Brand + date ── */}
-      <View style={styles.topRow}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandDot} />
-          <Text style={styles.brandName}>SWEATSTREAK</Text>
-        </View>
+      <Animated.View style={[styles.glowBottomLeft, glowStyle]}>
+        <LinearGradient
+          colors={['transparent', `${colors.secondary}18`]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      </Animated.View>
+
+      <View style={[styles.topRow, !showBranding && styles.topRowNoBrand]}>
+        {showBranding ? (
+          <View style={styles.brandRow}>
+            <View style={styles.brandDot} />
+            <Text style={styles.brandName}>SWEATSTREAK</Text>
+          </View>
+        ) : (
+          <View />
+        )}
         <Text style={styles.dateText}>{date}</Text>
       </View>
 
-      {/* ── 15–25% — Label block ── */}
       <View style={styles.labelBlock}>
         {intensity && (
           <View style={styles.intensityPill}>
-            <Text style={styles.intensityText}>⚡ HIGH INTENSITY</Text>
+            <Text style={styles.intensityText}>HIGH INTENSITY</Text>
           </View>
         )}
         <Text style={styles.prLabel}>{unitLabel}</Text>
         <Text style={styles.exerciseName}>{exercise}</Text>
       </View>
 
-      {/* ── 25–55% — Hero stat (the focal point) ── */}
       <View style={styles.heroBlock}>
-        <LinearGradient
-          colors={[`${colors.primary}1A`, 'transparent']}
-          style={styles.heroGlow}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        />
+        <View style={styles.heroGlow}>
+          <LinearGradient
+            colors={[`${colors.primary}18`, 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+          />
+          <Animated.View style={[StyleSheet.absoluteFill, heroPulseStyle]}>
+            <LinearGradient
+              colors={[`${colors.secondary}20`, `${colors.primary}08`, 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.8, y: 1 }}
+            />
+          </Animated.View>
+        </View>
         <Text style={styles.heroStat}>{heroText}</Text>
       </View>
 
-      {/* ── 55–65% — Progress + improvement ── */}
       <View style={styles.progressBlock}>
         {oldValue != null && (
           <View style={styles.progressRow}>
@@ -130,16 +181,17 @@ export default function PRCard({
         )}
       </View>
 
-      {/* ── 75–90% — Stats bar ── */}
       <View style={styles.statsBar}>
-        <StatCol label="VOLUME" value={volume >= 1000 ? `${(volume / 1000).toFixed(1)}T` : `${Math.round(volume)}KG`} />
+        <StatCol
+          label="VOLUME"
+          value={volume >= 1000 ? `${(volume / 1000).toFixed(1)}T` : `${Math.round(volume)}KG`}
+        />
         <View style={styles.statDivider} />
-        <StatCol label="SETS"   value={String(sets)} />
+        <StatCol label="SETS" value={String(sets)} />
         <View style={styles.statDivider} />
-        <StatCol label="TIME"   value={`${duration}M`} />
+        <StatCol label="TIME" value={`${duration}M`} />
       </View>
 
-      {/* ── 90–95% — Streak ── */}
       <View style={styles.bottomRow}>
         <View style={styles.streakPill}>
           <Text style={styles.streakText}>🔥 {streak} DAY STREAK</Text>
@@ -170,8 +222,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     overflow: 'hidden',
   },
-
-  // Glows
   glowTopRight: {
     position: 'absolute',
     top: -60,
@@ -188,12 +238,13 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 100,
   },
-
-  // Top
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  topRowNoBrand: {
+    justifyContent: 'flex-end',
   },
   brandRow: {
     flexDirection: 'row',
@@ -218,8 +269,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
   },
-
-  // Label block
   labelBlock: {
     gap: 6,
   },
@@ -249,8 +298,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-
-  // Hero
   heroBlock: {
     position: 'relative',
     paddingVertical: 8,
@@ -269,8 +316,6 @@ const styles = StyleSheet.create({
     lineHeight: 80,
     letterSpacing: -2,
   },
-
-  // Progress
   progressBlock: {
     gap: 10,
   },
@@ -307,8 +352,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     letterSpacing: 0.8,
   },
-
-  // Stats bar
   statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -339,8 +382,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 1.5,
   },
-
-  // Bottom
   bottomRow: {
     alignItems: 'flex-end',
   },

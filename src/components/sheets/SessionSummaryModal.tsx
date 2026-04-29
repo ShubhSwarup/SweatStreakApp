@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,9 @@ import { navigationRef } from '../../utils/navigation';
 import { useSessionStore } from '../../store/sessionStore';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
-import SharePreviewScreen, { type ShareData, type ShareTemplate } from '../share/SharePreviewScreen';
+import SharePreviewScreen from '../share/SharePreviewScreen';
+import type { ShareData, ShareTemplate } from '../share/shareTypes';
+import { selectBestTemplate } from '../../utils/selectBestTemplate';
 
 function formatDuration(seconds: number): string {
   const t = Math.floor(seconds);
@@ -33,46 +35,77 @@ function levelLabel(level: number): string {
 }
 
 function formatShareDate(now = new Date()): string {
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   return `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+
+function getIntensityLevel(summary: { totalVolume: number; totalSets: number }): 'low' | 'medium' | 'high' {
+  if (summary.totalSets > 20 || summary.totalVolume > 5000) return 'high';
+  if (summary.totalSets > 12 || summary.totalVolume > 2500) return 'medium';
+  return 'low';
+}
+
+function inferMuscleGroup(sessionName: string): string {
+  const name = sessionName.toLowerCase();
+  if (name.includes('push') || name.includes('chest')) return 'CHEST';
+  if (name.includes('pull') || name.includes('back')) return 'BACK';
+  if (name.includes('leg') || name.includes('quad') || name.includes('ham')) return 'LEGS';
+  if (name.includes('shoulder')) return 'SHOULDERS';
+  if (name.includes('arm') || name.includes('bicep') || name.includes('tricep')) return 'ARMS';
+  if (name.includes('core') || name.includes('abs')) return 'CORE';
+  if (name.includes('cardio') || name.includes('run')) return 'CARDIO';
+  return 'FULL BODY';
 }
 
 export default function SessionSummaryModal() {
   const [shareVisible, setShareVisible] = useState(false);
+  const [hasShared, setHasShared] = useState(false);
 
   const { activeOverlay, postSessionData, advancePostSessionQueue, clearPostSessionData } =
     useUIStore();
   const { clearFinishResult } = useSessionStore();
   const isVisible = activeOverlay === 'sessionSummary';
 
+  useEffect(() => {
+    if (!postSessionData?.sessionId) return;
+    setHasShared(false);
+    setShareVisible(false);
+  }, [postSessionData?.sessionId]);
+
   if (!isVisible || !postSessionData) return null;
 
-  const { finishResult, sessionId, exerciseNames } = postSessionData;
+  const { finishResult, sessionId, exerciseNames, newLevel, sessionName } = postSessionData;
   const { summary, xp, streak, personalRecords, message } = finishResult;
 
   const hasPRs = personalRecords.length > 0;
-  const isHighIntensity = summary.totalSets > 20 || summary.totalVolume > 5000;
+  const intensityLevel = getIntensityLevel(summary);
+  const isHighIntensity = intensityLevel === 'high';
+  const firstPR =
+    personalRecords.find((pr) => pr.type === 'weight' || pr.type === '1rm') ?? personalRecords[0];
+  const workoutName = sessionName?.trim() ? sessionName.toUpperCase() : 'WORKOUT';
+  const muscleGroup = inferMuscleGroup(sessionName ?? '');
 
-  // Default template: overlay when there's a PR, session card for high-intensity, else PR card
-  const defaultTemplate: ShareTemplate = hasPRs ? 'overlay' : isHighIntensity ? 'session' : 'pr';
+  const defaultTemplate: ShareTemplate = selectBestTemplate({
+    hasPR: hasPRs,
+    intensity: intensityLevel,
+    volume: summary.totalVolume,
+    muscleGroup,
+  });
 
-  // First weight/1rm PR is most meaningful to feature
-  const firstPR = personalRecords.find(pr => pr.type === 'weight' || pr.type === '1rm') ?? personalRecords[0];
-
-const shareData: ShareData = {
-  volume:       summary.totalVolume,
-  sets:         summary.totalSets,
-  duration:     Math.round(summary.duration / 60),
-  streak:       streak.current,
-  intensity:    isHighIntensity,
-  date:         formatShareDate(),
-  level:        levelLabel(postSessionData.newLevel),
-  prExercise:   firstPR ? (exerciseNames[firstPR.exercise] ?? firstPR.exercise) : 'WORKOUT',
-  prType:       firstPR?.type ?? 'weight',
-  prNewValue:   firstPR?.value ?? 0,
-  workoutName:  'WORKOUT',
-  muscleGroup:  'FULL BODY',
-};
+  const shareData: ShareData = {
+    volume: summary.totalVolume,
+    sets: summary.totalSets,
+    duration: Math.round(summary.duration / 60),
+    streak: streak.current,
+    intensity: isHighIntensity,
+    date: formatShareDate(),
+    level: levelLabel(newLevel),
+    prExercise: firstPR ? exerciseNames[firstPR.exercise] ?? firstPR.exercise : workoutName,
+    prType: firstPR?.type ?? 'weight',
+    prNewValue: firstPR?.value ?? 0,
+    workoutName,
+    muscleGroup,
+  };
 
   const dismiss = () => {
     advancePostSessionQueue();
@@ -102,27 +135,26 @@ const shareData: ShareData = {
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {/* Header */}
             <Text style={styles.tag}>WORKOUT COMPLETE</Text>
             <Text style={styles.heading}>Great session! 💪</Text>
             {message && message !== '💪 Solid workout!' && (
               <Text style={styles.message}>{message}</Text>
             )}
 
-            {/* Stats grid */}
             <View style={styles.statsGrid}>
               <StatCard
                 label="VOLUME"
-                value={`${summary.totalVolume >= 1000
-                  ? `${(summary.totalVolume / 1000).toFixed(1)}t`
-                  : `${Math.round(summary.totalVolume)}kg`}`}
+                value={
+                  summary.totalVolume >= 1000
+                    ? `${(summary.totalVolume / 1000).toFixed(1)}t`
+                    : `${Math.round(summary.totalVolume)}kg`
+                }
               />
               <StatCard label="SETS" value={String(summary.totalSets)} />
               <StatCard label="EXERCISES" value={String(summary.totalExercises)} />
               <StatCard label="DURATION" value={formatDuration(summary.duration)} />
             </View>
 
-            {/* XP + Streak row */}
             <View style={styles.rewardRow}>
               <View style={[styles.rewardCard, styles.xpCard]}>
                 <Text style={styles.xpValue}>+{xp.earned}</Text>
@@ -134,7 +166,6 @@ const shareData: ShareData = {
               </View>
             </View>
 
-            {/* PR badge */}
             {personalRecords.length > 0 && (
               <View style={styles.prBadge}>
                 <Text style={styles.prBadgeText}>
@@ -145,7 +176,6 @@ const shareData: ShareData = {
             )}
           </ScrollView>
 
-          {/* Footer CTAs */}
           <View style={styles.footer}>
             <View style={styles.footerRow}>
               <TouchableOpacity
@@ -155,36 +185,31 @@ const shareData: ShareData = {
               >
                 <Text style={styles.secondaryBtnText}>View Details</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleDone}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} activeOpacity={0.85}>
                 <Text style={styles.primaryBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
 
-            {shareData && (
-              <TouchableOpacity
-                style={styles.sharePRBtn}
-                onPress={() => setShareVisible(true)}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.sharePRBtnText}>🏆 Share PR Card</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.shareBtn, hasShared && styles.shareBtnSecondary]}
+              onPress={() => setShareVisible(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.shareBtnText, hasShared && styles.shareBtnTextSecondary]}>
+                {hasShared ? 'Share Again' : 'Share Workout Card'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Animated.View>
       </View>
 
-      {shareData && (
-        <SharePreviewScreen
-          visible={shareVisible}
-          onClose={() => setShareVisible(false)}
-          shareData={shareData}
-          defaultTemplate={defaultTemplate}
-        />
-      )}
+      <SharePreviewScreen
+        visible={shareVisible}
+        onClose={() => setShareVisible(false)}
+        onShareSuccess={() => setHasShared(true)}
+        shareData={shareData}
+        defaultTemplate={defaultTemplate}
+      />
     </Modal>
   );
 }
@@ -215,8 +240,6 @@ const styles = StyleSheet.create({
     padding: spacing['2xl'],
     gap: spacing.xl,
   },
-
-  // Header
   tag: {
     fontSize: 11,
     fontWeight: '800',
@@ -236,8 +259,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: -spacing.sm,
   },
-
-  // Stats grid
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -264,8 +285,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 1.2,
   },
-
-  // Reward row
   rewardRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -299,8 +318,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 1.2,
   },
-
-  // PR badge
   prBadge: {
     backgroundColor: `${colors.xp}18`,
     borderRadius: radii.md,
@@ -313,8 +330,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.xp,
   },
-
-  // Footer
   footer: {
     flexDirection: 'column',
     gap: spacing.sm,
@@ -351,17 +366,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.onPrimary,
   },
-  sharePRBtn: {
+  shareBtn: {
     height: 44,
     borderRadius: radii.lg,
     backgroundColor: `${colors.primary}14`,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sharePRBtnText: {
+  shareBtnSecondary: {
+    backgroundColor: colors.surfaceContainerHighest,
+  },
+  shareBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
+  },
+  shareBtnTextSecondary: {
+    color: colors.textSecondary,
   },
 });

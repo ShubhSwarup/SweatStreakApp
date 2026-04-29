@@ -13,10 +13,11 @@ export default function SessionTimer({ elapsedSeconds, style }: Props) {
     <Text
       style={[
         {
-          fontSize: 22,
-          fontWeight: '700',
+          fontSize: 18,
+          fontWeight: '800',
           color: colors.primary,
           fontVariant: ['tabular-nums'],
+          flexShrink: 0,
         },
         style,
       ]}

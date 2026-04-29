@@ -1,21 +1,28 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { colors } from '../../constants/colors';
 import { radii } from '../../constants/spacing';
 import { CARD_W, CARD_H } from './PRCard';
 
 export interface SessionIdentityCardProps {
-  workoutName: string;    // "PUSH DAY"
+  workoutName: string;
   volume: number;
-  duration: number;       // minutes
+  duration: number;
   sets: number;
-  muscleGroup: string;    // "CHEST"
+  muscleGroup: string;
   intensity: boolean;
   streak: number;
-  level: string;          // "ADVANCED"
-  percentile?: number;    // 78 → "outlifted 78%"
+  level: string;
+  percentile?: number;
   date: string;
+  showBranding?: boolean;
 }
 
 export default function SessionIdentityCard({
@@ -29,12 +36,26 @@ export default function SessionIdentityCard({
   level,
   percentile,
   date,
+  showBranding = true,
 }: SessionIdentityCardProps) {
   const volumeLabel = volume >= 1000 ? `${(volume / 1000).toFixed(1)}T` : `${Math.round(volume)} KG`;
+  const lineProgress = useSharedValue(0);
+
+  React.useEffect(() => {
+    lineProgress.value = 0;
+    lineProgress.value = withTiming(1, {
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [lineProgress]);
+
+  const accentLineStyle = useAnimatedStyle(() => ({
+    height: 200 * lineProgress.value,
+    opacity: lineProgress.value,
+  }));
 
   return (
     <View style={styles.card}>
-      {/* Subtle vertical gradient background */}
       <LinearGradient
         colors={[colors.surface, colors.surfaceContainerLow]}
         style={StyleSheet.absoluteFill}
@@ -42,26 +63,27 @@ export default function SessionIdentityCard({
         end={{ x: 0, y: 1 }}
       />
 
-      {/* Decorative vertical accent line — top-left */}
-      <View style={styles.accentLine}>
+      <Animated.View style={[styles.accentLine, accentLineStyle]}>
         <LinearGradient
           colors={[colors.primary, colors.tertiary]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
-      </View>
+      </Animated.View>
 
-      {/* Brand + date */}
-      <View style={styles.topRow}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandDot} />
-          <Text style={styles.brandName}>SWEATSTREAK</Text>
-        </View>
+      <View style={[styles.topRow, !showBranding && styles.topRowNoBrand]}>
+        {showBranding ? (
+          <View style={styles.brandRow}>
+            <View style={styles.brandDot} />
+            <Text style={styles.brandName}>SWEATSTREAK</Text>
+          </View>
+        ) : (
+          <View />
+        )}
         <Text style={styles.dateText}>{date}</Text>
       </View>
 
-      {/* ── Top 20% — Big title ── */}
       <View style={styles.titleBlock}>
         <Text style={styles.workoutTitle}>{workoutName}</Text>
         <View style={styles.destroyedRow}>
@@ -69,21 +91,18 @@ export default function SessionIdentityCard({
         </View>
       </View>
 
-      {/* Intensity badge */}
       {intensity && (
         <View style={styles.intensityPill}>
-          <Text style={styles.intensityText}>⚡ HIGH INTENSITY SESSION</Text>
+          <Text style={styles.intensityText}>HIGH INTENSITY SESSION</Text>
         </View>
       )}
 
-      {/* ── 40–60% — Three stat cards ── */}
       <View style={styles.statCardsRow}>
         <GlassStatCard label="VOLUME" value={volumeLabel} />
         <GlassStatCard label="DURATION" value={`${duration} MIN`} />
         <GlassStatCard label="SETS" value={`${sets} SETS`} />
       </View>
 
-      {/* ── 65–75% — Muscle group ── */}
       <View style={styles.muscleBlock}>
         <Text style={styles.muscleIcon}>🎯</Text>
         <View>
@@ -92,25 +111,20 @@ export default function SessionIdentityCard({
         </View>
       </View>
 
-      {/* ── 75–85% — Percentile leaderboard (optional) ── */}
       {percentile != null && (
         <View style={styles.leaderboardCard}>
           <View style={styles.leaderboardLeft}>
             <Text style={styles.leaderboardIcon}>📊</Text>
             <Text style={styles.leaderboardText}>
-              YOU OUTLIFTED{' '}
-              <Text style={styles.leaderboardPct}>{percentile}%</Text>
-              {' '}OF USERS
+              YOU OUTLIFTED <Text style={styles.leaderboardPct}>{percentile}%</Text> OF USERS
             </Text>
           </View>
-          {/* Mini bar */}
           <View style={styles.percentileBarTrack}>
             <View style={[styles.percentileBarFill, { width: `${percentile}%` }]} />
           </View>
         </View>
       )}
 
-      {/* ── 90–95% — Badges row ── */}
       <View style={styles.badgesRow}>
         <View style={styles.streakPill}>
           <Text style={styles.streakText}>🔥 {streak} DAY STREAK</Text>
@@ -144,23 +158,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     overflow: 'hidden',
   },
-
-  // Accent line
   accentLine: {
     position: 'absolute',
     left: 14,
     top: 80,
     width: 4,
-    height: 200,
     borderRadius: 2,
     overflow: 'hidden',
   },
-
-  // Top
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  topRowNoBrand: {
+    justifyContent: 'flex-end',
   },
   brandRow: {
     flexDirection: 'row',
@@ -185,11 +197,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
   },
-
-  // Title block
   titleBlock: {
     gap: 4,
-    paddingLeft: 8, // offset from accent line
+    paddingLeft: 8,
   },
   workoutTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
@@ -209,8 +219,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     letterSpacing: 1,
   },
-
-  // Intensity badge
   intensityPill: {
     alignSelf: 'flex-start',
     backgroundColor: `${colors.tertiary}18`,
@@ -224,8 +232,6 @@ const styles = StyleSheet.create({
     color: colors.tertiary,
     letterSpacing: 1,
   },
-
-  // Glass stat cards row
   statCardsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -255,8 +261,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textAlign: 'center',
   },
-
-  // Muscle group
   muscleBlock: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -282,8 +286,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
-
-  // Leaderboard card
   leaderboardCard: {
     backgroundColor: `${colors.primary}10`,
     borderRadius: radii.sm,
@@ -323,8 +325,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 2,
   },
-
-  // Bottom badges
   badgesRow: {
     flexDirection: 'row',
     gap: 8,

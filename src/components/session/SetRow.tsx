@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
@@ -27,25 +28,84 @@ interface Props {
   suggestedReps?: number | null;
   onComplete: (data: LogSetData) => void;
   onRemove?: () => void;
+  onUnlog?: () => void;
   onOpenCalculator?: (weight: number) => void;
   isCompleting?: boolean;
 }
 
-// ── Layout constants ──────────────────────────────────────────────────────────
-// Card has 20px padding each side → 335px on a 375px phone.
-// Row: setNum(28) + gap(8) + pill(flex) + gap(8) + pill(flex) + gap(8) + check(52) = 104px fixed
-// Each pill: (335−104)/2 ≈ 115px → stepper(32)+input(~51px)+stepper(32)
-// With remove button: (335−104−8−28)/2 ≈ 97px → stepper(32)+input(~33px)+stepper(32)
-const INPUT_H   = 52;   // pill + completed row height
-const STEPPER_W = 32;   // wide enough to tap easily, leaves ~51px for input text
-const CHECK_SZ  = 52;   // log-set CTA — must stand out
-const SET_NUM_W = 28;   // # column
+type LayoutMetrics = {
+  inputHeight: number;
+  stepperWidth: number;
+  checkSize: number;
+  setNumWidth: number;
+  removeSize: number;
+  rowGap: number;
+  inputFontSize: number;
+  completedFontSize: number;
+  completedLineHeight: number;
+  labelFontSize: number;
+};
 
-function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
+function getLayoutMetrics(screenWidth: number): LayoutMetrics {
+  if (screenWidth <= 350) {
+    return {
+      inputHeight: 40,
+      stepperWidth: 24,
+      checkSize: 34,
+      setNumWidth: 18,
+      removeSize: 22,
+      rowGap: 4,
+      inputFontSize: 14,
+      completedFontSize: 13,
+      completedLineHeight: 18,
+      labelFontSize: 11,
+    };
+  }
+
+  if (screenWidth <= 390) {
+    return {
+      inputHeight: 42,
+      stepperWidth: 24,
+      checkSize: 38,
+      setNumWidth: 20,
+      removeSize: 22,
+      rowGap: 6,
+      inputFontSize: 15,
+      completedFontSize: 14,
+      completedLineHeight: 19,
+      labelFontSize: 12,
+    };
+  }
+
+  return {
+    inputHeight: 46,
+    stepperWidth: 28,
+    checkSize: 42,
+    setNumWidth: 22,
+    removeSize: 24,
+    rowGap: spacing.sm,
+    inputFontSize: 16,
+    completedFontSize: 15,
+    completedLineHeight: 21,
+    labelFontSize: 12,
+  };
+}
+
+function Stepper({
+  label,
+  onPress,
+  width,
+  height,
+}: {
+  label: string;
+  onPress: () => void;
+  width: number;
+  height: number;
+}) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={styles.stepper}
+      style={[styles.stepper, { width, height }]}
       activeOpacity={0.5}
       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
     >
@@ -62,30 +122,32 @@ export default function SetRow({
   suggestedReps,
   onComplete,
   onRemove,
+  onUnlog,
   onOpenCalculator,
   isCompleting = false,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const metrics = getLayoutMetrics(width);
   const isCompleted = set?.completed === true;
 
-  const [weight, setWeight]       = useState(set?.weight       != null ? String(set.weight)       : '');
-  const [reps,   setReps]         = useState(set?.reps         != null ? String(set.reps)         : '');
-  const [durationSec, setDurSec]  = useState(set?.durationSeconds != null ? String(set.durationSeconds) : '');
-  const [distance,    setDist]    = useState(set?.distance      != null ? String(set.distance)     : '');
-  const [error,  setError]        = useState<string | null>(null);
+  const [weight, setWeight] = useState(set?.weight != null ? String(set.weight) : '');
+  const [reps, setReps] = useState(set?.reps != null ? String(set.reps) : '');
+  const [durationSec, setDurSec] = useState(
+    set?.durationSeconds != null ? String(set.durationSeconds) : '',
+  );
+  const [distance, setDist] = useState(set?.distance != null ? String(set.distance) : '');
+  const [error, setError] = useState<string | null>(null);
 
   const checkScale = useRef(new Animated.Value(1)).current;
   const rowOpacity = useRef(new Animated.Value(isCompleted ? 1 : 0)).current;
 
-  // Pre-fill from suggestion once on mount
   useEffect(() => {
     if (!isCompleted) {
       if (weight === '' && suggestedWeight != null) setWeight(String(suggestedWeight));
-      if (reps   === '' && suggestedReps   != null) setReps(String(suggestedReps));
+      if (reps === '' && suggestedReps != null) setReps(String(suggestedReps));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isCompleted, reps, suggestedReps, suggestedWeight, weight]);
 
-  // Fade in completed row
   useEffect(() => {
     if (isCompleted) {
       Animated.timing(rowOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
@@ -148,72 +210,156 @@ export default function SetRow({
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Animated.sequence([
-      Animated.spring(checkScale, { toValue: 1.2, useNativeDriver: true, speed: 40, bounciness: 8 }),
-      Animated.spring(checkScale, { toValue: 1,   useNativeDriver: true, speed: 40, bounciness: 0 }),
+      Animated.spring(checkScale, {
+        toValue: 1.2,
+        useNativeDriver: true,
+        speed: 40,
+        bounciness: 8,
+      }),
+      Animated.spring(checkScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 40,
+        bounciness: 0,
+      }),
     ]).start();
     onComplete(data);
   };
 
-  // ── Completed row ─────────────────────────────────────────────────────────
   if (isCompleted && set) {
     return (
-      <Animated.View style={[styles.completedRow, { opacity: rowOpacity }]}>
-        <Text style={styles.setNum}>{setNumber}</Text>
+      <Animated.View
+        style={[
+          styles.completedRow,
+          { opacity: rowOpacity, minHeight: metrics.inputHeight, gap: metrics.rowGap },
+        ]}
+      >
+        <Text style={[styles.setNum, { width: metrics.setNumWidth }]}>{setNumber}</Text>
         <View style={styles.completedBody}>
           {trackingType === 'reps' && (
-            <Text style={styles.completedText}>
+            <Text
+              style={[
+                styles.completedText,
+                {
+                  fontSize: metrics.completedFontSize,
+                  lineHeight: metrics.completedLineHeight,
+                },
+              ]}
+              numberOfLines={2}
+            >
               {set.weight != null ? `${set.weight} kg` : 'BW'}
-              {'  ×  '}
+              {' × '}
               {set.reps != null ? `${set.reps}` : '—'}
-              <Text style={styles.completedUnit}> reps</Text>
+              <Text style={[styles.completedUnit, { fontSize: metrics.labelFontSize }]}> reps</Text>
               {set.isPR && <Text style={styles.prBadge}>  PR 🏆</Text>}
             </Text>
           )}
           {trackingType === 'time' && (
-            <Text style={styles.completedText}>
+            <Text
+              style={[
+                styles.completedText,
+                {
+                  fontSize: metrics.completedFontSize,
+                  lineHeight: metrics.completedLineHeight,
+                },
+              ]}
+            >
               {set.durationSeconds != null ? `${set.durationSeconds} s` : '—'}
             </Text>
           )}
           {trackingType === 'distance' && (
-            <Text style={styles.completedText}>
+            <Text
+              style={[
+                styles.completedText,
+                {
+                  fontSize: metrics.completedFontSize,
+                  lineHeight: metrics.completedLineHeight,
+                },
+              ]}
+            >
               {set.distance != null ? `${set.distance} km` : '—'}
             </Text>
           )}
         </View>
-        <View style={styles.checkDone}>
+        <View
+          style={[
+            styles.checkDone,
+            {
+              width: metrics.checkSize,
+              height: metrics.checkSize,
+            },
+          ]}
+        >
           <Text style={styles.checkDoneIcon}>✓</Text>
         </View>
+        {onUnlog && (
+          <TouchableOpacity
+            style={[
+              styles.unlogBtn,
+              {
+                width: metrics.removeSize,
+                height: metrics.removeSize,
+                borderRadius: metrics.removeSize / 2,
+              },
+            ]}
+            onPress={onUnlog}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          >
+            <Text style={styles.unlogBtnIcon}>↩</Text>
+          </TouchableOpacity>
+        )}
       </Animated.View>
     );
   }
 
-  // ── Input row ─────────────────────────────────────────────────────────────
   return (
     <View>
-      <View style={styles.inputRow}>
-        {/* # */}
-        <Text style={styles.setNum}>{setNumber}</Text>
+      <View style={[styles.inputRow, { gap: metrics.rowGap }]}>
+        <Text style={[styles.setNum, { width: metrics.setNumWidth }]}>{setNumber}</Text>
 
-        {/* Reps tracking: two pills side by side */}
         {trackingType === 'reps' && (
           <>
-            {/* Weight pill — calc icon overlaid in corner, no layout cost */}
-            <View style={[styles.pill, error && styles.pillError]}>
-              <Stepper label="−" onPress={() => handleStep('weight', -2.5)} />
+            <View style={[styles.pill, error && styles.pillError, { height: metrics.inputHeight }]}>
+              <Stepper
+                label="−"
+                onPress={() => handleStep('weight', -2.5)}
+                width={metrics.stepperWidth}
+                height={metrics.inputHeight}
+              />
               <TextInput
-                style={styles.pillInput}
+                style={[
+                  styles.pillInput,
+                  styles.numericInput,
+                  {
+                    height: metrics.inputHeight,
+                    fontSize: metrics.inputFontSize,
+                  },
+                  onOpenCalculator && styles.pillInputWithAccessory,
+                ]}
                 value={weight}
-                onChangeText={v => { setWeight(v); setError(null); }}
+                onChangeText={(v) => {
+                  setWeight(v);
+                  setError(null);
+                }}
                 placeholder={suggestedWeight != null ? String(suggestedWeight) : '—'}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
                 selectTextOnFocus
                 underlineColorAndroid="transparent"
               />
-              <Stepper label="+" onPress={() => handleStep('weight', 2.5)} />
+              <Stepper
+                label="+"
+                onPress={() => handleStep('weight', 2.5)}
+                width={metrics.stepperWidth}
+                height={metrics.inputHeight}
+              />
               {onOpenCalculator && (
                 <TouchableOpacity
-                  style={styles.calcOverlay}
+                  style={[
+                    styles.calcOverlay,
+                    { top: 4, right: metrics.stepperWidth + 3 },
+                  ]}
                   onPress={() => onOpenCalculator(parseFloat(weight) || 0)}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
@@ -222,31 +368,67 @@ export default function SetRow({
               )}
             </View>
 
-            {/* Reps pill */}
-            <View style={[styles.pill, error && styles.pillError]}>
-              <Stepper label="−" onPress={() => handleStep('reps', -1)} />
+            <View style={[styles.pill, error && styles.pillError, { height: metrics.inputHeight }]}>
+              <Stepper
+                label="−"
+                onPress={() => handleStep('reps', -1)}
+                width={metrics.stepperWidth}
+                height={metrics.inputHeight}
+              />
               <TextInput
-                style={styles.pillInput}
+                style={[
+                  styles.pillInput,
+                  styles.numericInput,
+                  {
+                    height: metrics.inputHeight,
+                    fontSize: metrics.inputFontSize,
+                  },
+                ]}
                 value={reps}
-                onChangeText={v => { setReps(v); setError(null); }}
+                onChangeText={(v) => {
+                  setReps(v);
+                  setError(null);
+                }}
                 placeholder={suggestedReps != null ? String(suggestedReps) : '—'}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
                 selectTextOnFocus
                 underlineColorAndroid="transparent"
               />
-              <Stepper label="+" onPress={() => handleStep('reps', 1)} />
+              <Stepper
+                label="+"
+                onPress={() => handleStep('reps', 1)}
+                width={metrics.stepperWidth}
+                height={metrics.inputHeight}
+              />
             </View>
           </>
         )}
 
-        {/* Time tracking */}
         {trackingType === 'time' && (
-          <View style={[styles.pill, styles.pillFull, error && styles.pillError]}>
+          <View
+            style={[
+              styles.pill,
+              styles.pillFull,
+              error && styles.pillError,
+              { height: metrics.inputHeight },
+            ]}
+          >
             <TextInput
-              style={[styles.pillInput, styles.pillInputFull]}
+              style={[
+                styles.pillInput,
+                styles.pillInputFull,
+                styles.numericInput,
+                {
+                  height: metrics.inputHeight,
+                  fontSize: metrics.inputFontSize,
+                },
+              ]}
               value={durationSec}
-              onChangeText={v => { setDurSec(v); setError(null); }}
+              onChangeText={(v) => {
+                setDurSec(v);
+                setError(null);
+              }}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
@@ -257,13 +439,30 @@ export default function SetRow({
           </View>
         )}
 
-        {/* Distance tracking */}
         {trackingType === 'distance' && (
-          <View style={[styles.pill, styles.pillFull, error && styles.pillError]}>
+          <View
+            style={[
+              styles.pill,
+              styles.pillFull,
+              error && styles.pillError,
+              { height: metrics.inputHeight },
+            ]}
+          >
             <TextInput
-              style={[styles.pillInput, styles.pillInputFull]}
+              style={[
+                styles.pillInput,
+                styles.pillInputFull,
+                styles.numericInput,
+                {
+                  height: metrics.inputHeight,
+                  fontSize: metrics.inputFontSize,
+                },
+              ]}
               value={distance}
-              onChangeText={v => { setDist(v); setError(null); }}
+              onChangeText={(v) => {
+                setDist(v);
+                setError(null);
+              }}
               placeholder="0.0"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
@@ -274,10 +473,16 @@ export default function SetRow({
           </View>
         )}
 
-        {/* Log Set — hero CTA */}
         <Animated.View style={{ transform: [{ scale: checkScale }] }}>
           <TouchableOpacity
-            style={[styles.checkBtn, isCompleting && styles.checkBtnDisabled]}
+            style={[
+              styles.checkBtn,
+              isCompleting && styles.checkBtnDisabled,
+              {
+                width: metrics.checkSize,
+                height: metrics.checkSize,
+              },
+            ]}
             onPress={handleComplete}
             disabled={isCompleting}
             activeOpacity={0.75}
@@ -286,10 +491,16 @@ export default function SetRow({
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Remove set */}
         {onRemove && (
           <TouchableOpacity
-            style={styles.removeBtn}
+            style={[
+              styles.removeBtn,
+              {
+                width: metrics.removeSize,
+                height: metrics.removeSize,
+                borderRadius: metrics.removeSize / 2,
+              },
+            ]}
             onPress={onRemove}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -299,39 +510,43 @@ export default function SetRow({
         )}
       </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <Text
+          style={[
+            styles.errorText,
+            { marginLeft: metrics.setNumWidth + metrics.rowGap },
+          ]}
+        >
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // ── Shared ──────────────────────────────────────────────────────────────────
   setNum: {
-    width: SET_NUM_W,
     fontSize: 13,
     fontWeight: '700',
     color: colors.textMuted,
     textAlign: 'center',
+    flexShrink: 0,
   },
-
-  // ── Completed row ───────────────────────────────────────────────────────────
   completedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: INPUT_H,
-    paddingVertical: 6,
-    gap: spacing.sm,
+    paddingVertical: 10,
   },
   completedBody: {
     flex: 1,
+    minWidth: 0,
   },
   completedText: {
-    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+    flexShrink: 1,
   },
   completedUnit: {
-    fontSize: 13,
     fontWeight: '400',
     color: colors.textSecondary,
   },
@@ -341,70 +556,66 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   checkDone: {
-    width: CHECK_SZ,
-    height: CHECK_SZ,
     borderRadius: radii.full,
     backgroundColor: `${colors.primary}25`,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   checkDoneIcon: {
-    fontSize: 22,
+    fontSize: 16,
     color: colors.primary,
     fontWeight: '800',
   },
-
-  // ── Input row ───────────────────────────────────────────────────────────────
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
-    gap: spacing.sm,
+    paddingVertical: 9,
   },
-
-  // Pill = the rounded input group [stepper | textInput | stepper]
   pill: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    height: INPUT_H,
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.sm,
-    // position:relative is the RN default — needed for calcOverlay
+    overflow: 'hidden',
   },
   pillFull: {
-    flex: 2,           // time / distance gets more room
+    flex: 2,
   },
   pillError: {
     borderWidth: 1.5,
     borderColor: colors.error,
   },
-
-  // Stepper — fills the full pill height so the whole side column is tappable
   stepper: {
-    width: STEPPER_W,
-    height: INPUT_H,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   stepperText: {
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '300',
     color: colors.textSecondary,
   },
-
-  // Text input inside pill
   pillInput: {
     flex: 1,
-    height: INPUT_H,
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,          // #FFFFFF — white, always visible
+    minWidth: 0,
+    color: colors.text,
     backgroundColor: 'transparent',
     textAlign: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
     paddingVertical: 0,
+    fontWeight: '700',
+  },
+  numericInput: {
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  pillInputWithAccessory: {
+    paddingRight: 14,
   },
   pillInputFull: {
     paddingHorizontal: spacing.md,
@@ -416,62 +627,59 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     paddingRight: spacing.sm,
   },
-
-  // Plate calculator badge — absolute so it doesn't shrink the input
   calcOverlay: {
     position: 'absolute',
-    bottom: 3,
-    right: STEPPER_W + 2,   // sits just inside the right stepper
-    width: 20,
+    width: 18,
     height: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   calcIcon: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textMuted,
-    lineHeight: 15,
+    lineHeight: 14,
   },
-
-  // Log Set CTA
   checkBtn: {
-    width: CHECK_SZ,
-    height: CHECK_SZ,
     borderRadius: radii.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   checkBtnDisabled: {
     opacity: 0.45,
   },
   checkBtnIcon: {
-    fontSize: 24,
+    fontSize: 18,
     color: colors.onPrimary,
     fontWeight: '800',
   },
-
-  // Remove set (secondary — kept small intentionally)
   removeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.full,
     backgroundColor: `${colors.error}18`,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   removeBtnIcon: {
     fontSize: 11,
     color: colors.error,
     fontWeight: '700',
   },
-
-  // Error
   errorText: {
     fontSize: 11,
     color: colors.error,
-    marginLeft: SET_NUM_W + spacing.sm,
     marginTop: 3,
     marginBottom: 4,
+  },
+  unlogBtn: {
+    backgroundColor: `${colors.outlineVariant}40`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  unlogBtnIcon: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '700',
   },
 });

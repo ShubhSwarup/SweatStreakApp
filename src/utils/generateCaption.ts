@@ -1,37 +1,67 @@
-import type { ShareTemplate, ShareData } from '../components/share/SharePreviewScreen';
+import type { CaptionMode, ShareData, ShareTemplate } from '../components/share/shareTypes';
 
-export function generateCaption(type: ShareTemplate, data: ShareData): string {
-  switch (type) {
-    case 'pr': {
-      const exercise = titleCase(data.prExercise);
-      const improvement = data.prOldValue != null
-        ? ` (+${+(data.prNewValue - data.prOldValue).toFixed(1)}kg)`
-        : '';
-      if (data.prNewReps != null) {
-        return `PR unlocked 🔓 ${data.prNewValue}kg × ${data.prNewReps} on ${exercise}${improvement}`;
-      }
-      return `New ${data.prType === '1rm' ? '1RM ' : ''}PR 🔓 ${data.prNewValue}kg on ${exercise}${improvement}`;
+export function generateCaption(
+  type: ShareTemplate,
+  data: ShareData,
+  mode: CaptionMode = 'minimal',
+): string {
+  if (type === 'pr') {
+    const repsText = data.prNewReps != null ? ` × ${data.prNewReps}` : '';
+    switch (mode) {
+      case 'minimal':
+        return `${data.prNewValue}kg${repsText} 🔓`;
+      case 'motivational':
+        if (data.prOldValue != null) {
+          return `New PR unlocked! ${data.prOldValue}kg → ${data.prNewValue}kg. Progress is showing 🔥`;
+        }
+        return `New PR unlocked! ${titleCase(data.prExercise)} is moving up fast 🔥`;
+      case 'aggressive':
+        return `${data.prNewValue}kg${repsText}. Not slowing down.`;
+      case 'funny':
+        return `Accidentally hit a ${data.prNewValue}kg PR today 😅 oops`;
+      default:
+        return `${data.prNewValue}kg${repsText} 🔓`;
     }
-
-    case 'session': {
-      const name = data.workoutName;
-      return `${name} destroyed 💪 ${formatVolume(data.volume)} total volume`;
-    }
-
-    case 'overlay': {
-      const repsStr = data.prNewReps != null ? ` × ${data.prNewReps}` : '';
-      return `${data.prNewValue}kg${repsStr} 🔥`;
-    }
-
-    default:
-      return 'New personal record 🔥';
   }
+
+  if (type === 'session') {
+    switch (mode) {
+      case 'minimal':
+        return `${data.workoutName.toLowerCase()} ✓`;
+      case 'motivational':
+        return `Consistency wins. Day ${data.streak} 💪`;
+      case 'aggressive':
+        return `${Math.round(data.volume)}kg moved. Next.`;
+      case 'funny':
+        return `Destroyed ${data.workoutName.toLowerCase()}, now I can't lift my arms 🫠`;
+      default:
+        return `${data.workoutName.toLowerCase()} ✓`;
+    }
+  }
+
+  if (type === 'overlay') {
+    switch (mode) {
+      case 'minimal':
+        return overlayMinimalCaption(data);
+      case 'motivational':
+        return 'Earned this one 🔥';
+      case 'aggressive':
+        return 'Built different';
+      case 'funny':
+        return 'RIP my muscles 💀';
+      default:
+        return overlayMinimalCaption(data);
+    }
+  }
+
+  return 'New personal record 🔥';
 }
 
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function formatVolume(v: number): string {
-  return v >= 1000 ? `${(v / 1000).toFixed(1)}t` : `${Math.round(v)}kg`;
+function overlayMinimalCaption(data: ShareData): string {
+  const repsText = data.prNewReps != null ? ` × ${data.prNewReps}` : '';
+  return `${data.prNewValue}kg${repsText}`;
 }

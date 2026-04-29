@@ -8,157 +8,298 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import PRCard, { CARD_W, CARD_H, type PRCardProps } from './PRCard';
 import SessionIdentityCard, { type SessionIdentityCardProps } from './SessionIdentityCard';
 import OverlayCard, { type OverlayCardProps } from './OverlayCard';
-import { captureCard, shareToInstagram, saveToLibrary } from '../../utils/shareWorkout';
+import Toast from '../common/Toast';
+import {
+  captureCard,
+  saveToLibrary,
+  shareToInstagram,
+  ShareWorkoutError,
+} from '../../utils/shareWorkout';
 import { generateCaption } from '../../utils/generateCaption';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
 import { log } from '../../utils/logger';
-
-export type ShareTemplate = 'pr' | 'session' | 'overlay';
-
-// Unified data shape — parent fills all fields it can; card components handle optional ones
-export interface ShareData {
-  // Common
-  volume: number;
-  sets: number;
-  duration: number;       // minutes
-  streak: number;
-  intensity: boolean;
-  date: string;
-  level: string;          // "ADVANCED"
-  // PR fields
-  prExercise: string;
-  prType: PRCardProps['prType'];
-  prNewValue: number;
-  prNewReps?: number;
-  prOldValue?: number;
-  // Session identity fields
-  workoutName: string;
-  muscleGroup: string;
-  percentile?: number;
-}
+import type { CaptionMode, ShareData, ShareTemplate } from './shareTypes';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onShareSuccess?: () => void;
   shareData: ShareData;
   defaultTemplate: ShareTemplate;
 }
 
-const CHIPS: { id: ShareTemplate; label: string }[] = [
-  { id: 'overlay',  label: 'Overlay' },
-  { id: 'pr',       label: 'PR Card' },
-  { id: 'session',  label: 'Session Card' },
+const TEMPLATE_CHIPS: { id: ShareTemplate; label: string }[] = [
+  { id: 'overlay', label: 'Overlay' },
+  { id: 'pr', label: 'PR Card' },
+  { id: 'session', label: 'Session Card' },
+];
+
+const CAPTION_MODE_CHIPS: { id: CaptionMode; label: string }[] = [
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'motivational', label: 'Motivational' },
+  { id: 'aggressive', label: 'Aggressive' },
+  { id: 'funny', label: 'Funny' },
 ];
 
 const SCREEN_W = Dimensions.get('window').width;
-// Preview scale so CARD_W fits within screen padding
 const PREVIEW_SCALE = Math.min(1, (SCREEN_W - spacing.lg * 2) / CARD_W);
 
-type ShareState = 'idle' | 'capturing' | 'sharing' | 'saving';
+type ShareState = 'idle' | 'capturing' | 'sharing' | 'saving' | 'success';
+type ToastVariant = 'info' | 'success' | 'error';
+type ToastState = { message: string; variant: ToastVariant } | null;
 
-export default function SharePreviewScreen({ visible, onClose, shareData, defaultTemplate }: Props) {
-  const cardRef    = useRef<View>(null);
-  const overlayRef = useRef<View>(null);  // transparent-only for overlay template
+export default function SharePreviewScreen({
+  visible,
+  onClose,
+  onShareSuccess,
+  shareData,
+  defaultTemplate,
+}: Props) {
+  const cardRef = useRef<View>(null);
+  const overlayRef = useRef<View>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [template, setTemplate]     = useState<ShareTemplate>(defaultTemplate);
-  const [caption, setCaption]       = useState(() => generateCaption(defaultTemplate, shareData));
+  const [template, setTemplate] = useState<ShareTemplate>(defaultTemplate);
+  const [captionMode, setCaptionMode] = useState<CaptionMode>('minimal');
+  const [caption, setCaption] = useState(() => generateCaption(defaultTemplate, shareData, 'minimal'));
   const [shareState, setShareState] = useState<ShareState>('idle');
+  const [showBranding, setShowBranding] = useState(true);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  const previewOpacity = useSharedValue(0);
+  const previewScale = useSharedValue(0.9);
+  const captionOpacity = useSharedValue(0);
+  const captionTranslateY = useSharedValue(18);
+  const footerOpacity = useSharedValue(0);
+  const footerTranslateY = useSharedValue(24);
 
   const isBusy = shareState !== 'idle';
 
   React.useEffect(() => {
-    if (visible) {
-      setTemplate(defaultTemplate);
-      setCaption(generateCaption(defaultTemplate, shareData));
+    if (!visible) {
+      clearPendingClose();
+      setShareState('idle');
+      setToast(null);
+      return;
     }
-  }, [visible, defaultTemplate]);
 
-  const handleTemplateChange = (t: ShareTemplate) => {
-    setTemplate(t);
-    setCaption(generateCaption(t, shareData));
+    setTemplate(defaultTemplate);
+    setCaptionMode('minimal');
+    setCaption(generateCaption(defaultTemplate, shareData, 'minimal'));
+    setShowBranding(true);
+    setShareState('idle');
+    setToast(null);
+
+    previewOpacity.value = 0;
+    previewScale.value = 0.9;
+    captionOpacity.value = 0;
+    captionTranslateY.value = 18;
+    footerOpacity.value = 0;
+    footerTranslateY.value = 24;
+
+    previewOpacity.value = withTiming(1, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+    previewScale.value = withTiming(1, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+    captionOpacity.value = withDelay(
+      50,
+      withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) }),
+    );
+    captionTranslateY.value = withDelay(
+      50,
+      withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }),
+    );
+    footerOpacity.value = withDelay(
+      100,
+      withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }),
+    );
+    footerTranslateY.value = withDelay(
+      100,
+      withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }),
+    );
+
+    return () => clearPendingClose();
+  }, [
+    captionOpacity,
+    captionTranslateY,
+    defaultTemplate,
+    footerOpacity,
+    footerTranslateY,
+    previewOpacity,
+    previewScale,
+    shareData,
+    visible,
+  ]);
+
+  React.useEffect(() => {
+    if (!toast) return undefined;
+    const timeoutId = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(timeoutId);
+  }, [toast]);
+
+  const previewAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: previewOpacity.value,
+    transform: [{ scale: previewScale.value }],
+  }));
+
+  const captionAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: captionOpacity.value,
+    transform: [{ translateY: captionTranslateY.value }],
+  }));
+
+  const footerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: footerOpacity.value,
+    transform: [{ translateY: footerTranslateY.value }],
+  }));
+
+  const handleTemplateChange = (nextTemplate: ShareTemplate) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTemplate(nextTemplate);
+    setCaption(generateCaption(nextTemplate, shareData, captionMode));
   };
 
-  const getActiveRef = () => template === 'overlay' ? overlayRef : cardRef;
+  const handleCaptionModeChange = (mode: CaptionMode) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCaptionMode(mode);
+    setCaption(generateCaption(template, shareData, mode));
+  };
+
+  const handleBrandingToggle = (value: boolean) => {
+    setShowBranding(value);
+  };
+
+  const getActiveRef = () => (template === 'overlay' ? overlayRef : cardRef);
+
+  const showToastMessage = (message: string, variant: ToastVariant) => {
+    setToast({ message, variant });
+  };
+
+  const clearPendingClose = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
 
   const handleShare = async () => {
+    if (isBusy) return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShareState('capturing');
+
     try {
       const uri = await captureCard(getActiveRef());
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       setShareState('sharing');
-      await shareToInstagram(uri);
+      const result = await shareToInstagram(uri);
+
+      if (result === 'savedFallback') {
+        setShareState('idle');
+        showToastMessage('Instagram not found. Image saved to Photos instead.', 'info');
+        return;
+      }
+
+      setShareState('success');
+      clearPendingClose();
+      closeTimerRef.current = setTimeout(() => {
+        onShareSuccess?.();
+        onClose();
+        setShareState('idle');
+      }, 1000);
     } catch (err) {
       log.error('SharePreviewScreen', 'share failed:', err);
-      Alert.alert('Share failed', 'Could not capture the card. Please try again.');
-    } finally {
       setShareState('idle');
+      showToastMessage(getShareErrorMessage(err), 'error');
     }
   };
 
   const handleSave = async () => {
+    if (isBusy) return;
+
     setShareState('capturing');
     try {
       const uri = await captureCard(getActiveRef());
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       setShareState('saving');
-      const saved = await saveToLibrary(uri);
-      if (saved) Alert.alert('Saved!', 'Your card has been saved to Photos.');
+      await saveToLibrary(uri);
+      setShareState('idle');
+      showToastMessage('Saved to Photos.', 'success');
     } catch (err) {
       log.error('SharePreviewScreen', 'save failed:', err);
-      Alert.alert('Save failed', 'Could not save the card. Please try again.');
-    } finally {
       setShareState('idle');
+      showToastMessage(getShareErrorMessage(err), 'error');
     }
   };
 
-  // Derive card-specific props from unified ShareData
   const prProps: PRCardProps = {
-    exercise:  shareData.prExercise,
-    prType:    shareData.prType,
-    newValue:  shareData.prNewValue,
-    newReps:   shareData.prNewReps,
-    oldValue:  shareData.prOldValue,
-    volume:    shareData.volume,
-    sets:      shareData.sets,
-    duration:  shareData.duration,
-    streak:    shareData.streak,
+    exercise: shareData.prExercise,
+    prType: shareData.prType,
+    newValue: shareData.prNewValue,
+    newReps: shareData.prNewReps,
+    oldValue: shareData.prOldValue,
+    volume: shareData.volume,
+    sets: shareData.sets,
+    duration: shareData.duration,
+    streak: shareData.streak,
     intensity: shareData.intensity,
-    date:      shareData.date,
+    date: shareData.date,
+    showBranding,
   };
 
   const sessionProps: SessionIdentityCardProps = {
-    workoutName:  shareData.workoutName,
-    volume:       shareData.volume,
-    duration:     shareData.duration,
-    sets:         shareData.sets,
-    muscleGroup:  shareData.muscleGroup,
-    intensity:    shareData.intensity,
-    streak:       shareData.streak,
-    level:        shareData.level,
-    percentile:   shareData.percentile,
-    date:         shareData.date,
+    workoutName: shareData.workoutName,
+    volume: shareData.volume,
+    duration: shareData.duration,
+    sets: shareData.sets,
+    muscleGroup: shareData.muscleGroup,
+    intensity: shareData.intensity,
+    streak: shareData.streak,
+    level: shareData.level,
+    percentile: shareData.percentile,
+    date: shareData.date,
+    showBranding,
   };
 
   const overlayProps: OverlayCardProps = {
-    exercise:  shareData.prExercise,
-    weight:    shareData.prNewValue,
-    reps:      shareData.prNewReps ?? 0,
-    prBadge:   shareData.prOldValue != null ? `+${+(shareData.prNewValue - shareData.prOldValue).toFixed(1)} KG` : undefined,
-    volume:    shareData.volume,
-    sets:      shareData.sets,
-    duration:  shareData.duration,
-    streak:    shareData.streak,
-    level:     shareData.level,
+    exercise: shareData.prExercise,
+    weight: shareData.prNewValue,
+    reps: shareData.prNewReps,
+    prBadge:
+      shareData.prOldValue != null
+        ? `+${+(shareData.prNewValue - shareData.prOldValue).toFixed(1)} KG`
+        : undefined,
+    volume: shareData.volume,
+    sets: shareData.sets,
+    duration: shareData.duration,
+    streak: shareData.streak,
+    level: shareData.level,
     intensity: shareData.intensity,
+    showBranding,
   };
 
   const previewContainerStyle = {
@@ -172,8 +313,8 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
     height: CARD_H,
     transform: [
       { scale: PREVIEW_SCALE },
-      { translateX: -(CARD_W * (1 - PREVIEW_SCALE) / 2) },
-      { translateY: -(CARD_H * (1 - PREVIEW_SCALE) / 2) },
+      { translateX: -((CARD_W * (1 - PREVIEW_SCALE)) / 2) },
+      { translateY: -((CARD_H * (1 - PREVIEW_SCALE)) / 2) },
     ],
   };
 
@@ -190,7 +331,6 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Share Story</Text>
             <TouchableOpacity
@@ -203,14 +343,13 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
             </TouchableOpacity>
           </View>
 
-          {/* Template chips */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipsRow}
             style={styles.chipsScroll}
           >
-            {CHIPS.map(chip => (
+            {TEMPLATE_CHIPS.map((chip) => (
               <TouchableOpacity
                 key={chip.id}
                 style={[styles.chip, template === chip.id && styles.chipActive]}
@@ -230,10 +369,8 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Card preview */}
-            <View style={[previewContainerStyle, styles.previewShadow]}>
+            <Animated.View style={[previewContainerStyle, styles.previewShadow, previewAnimatedStyle]}>
               {template === 'overlay' ? (
-                // Overlay preview: dark gradient placeholder behind, overlay on top
                 <View style={previewInnerStyle}>
                   <LinearGradient
                     colors={['#1a1c28', '#0d0f0d']}
@@ -246,24 +383,22 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
                   </View>
                 </View>
               ) : (
-                <View style={[previewInnerStyle]} ref={cardRef} collapsable={false}>
-                  {template === 'pr'      && <PRCard {...prProps} />}
+                <View style={previewInnerStyle} ref={cardRef} collapsable={false}>
+                  {template === 'pr' && <PRCard {...prProps} />}
                   {template === 'session' && <SessionIdentityCard {...sessionProps} />}
                 </View>
               )}
-            </View>
+            </Animated.View>
 
-            {/* Overlay tip */}
             {template === 'overlay' && (
               <View style={styles.overlayTip}>
                 <Text style={styles.overlayTipText}>
-                  💡 Tip: This overlays on your Instagram Story photo/video
+                  Tip: This overlays on your Instagram Story photo or video.
                 </Text>
               </View>
             )}
 
-            {/* Caption editor */}
-            <View style={styles.captionSection}>
+            <Animated.View style={[styles.captionSection, captionAnimatedStyle]}>
               <Text style={styles.captionLabel}>CAPTION</Text>
               <TextInput
                 style={styles.captionInput}
@@ -271,18 +406,52 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
                 onChangeText={setCaption}
                 multiline
                 maxLength={200}
-                placeholder="Add a caption…"
+                placeholder="Add a caption..."
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.primary}
               />
               <Text style={styles.captionCount}>{caption.length}/200</Text>
-            </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.captionModesRow}
+              >
+                {CAPTION_MODE_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    style={[styles.chip, captionMode === chip.id && styles.chipActive]}
+                    onPress={() => handleCaptionModeChange(chip.id)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.chipText, captionMode === chip.id && styles.chipTextActive]}>
+                      {chip.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.brandingRow}>
+                <View style={styles.brandingTextWrap}>
+                  <Text style={styles.brandingTitle}>Include SweatStreak logo</Text>
+                  <Text style={styles.brandingHint}>Keeps the card branded and authentic.</Text>
+                </View>
+                <Switch
+                  value={showBranding}
+                  onValueChange={handleBrandingToggle}
+                  trackColor={{
+                    false: colors.surfaceContainerHighest,
+                    true: `${colors.primary}55`,
+                  }}
+                  thumbColor={showBranding ? colors.primary : colors.textSecondary}
+                />
+              </View>
+            </Animated.View>
           </ScrollView>
 
-          {/* CTAs */}
-          <View style={styles.footer}>
+          <Animated.View style={[styles.footer, footerAnimatedStyle]}>
             <TouchableOpacity
-              style={styles.primaryBtnWrapper}
+              style={[styles.primaryBtnWrapper, isBusy && styles.btnDisabled]}
               onPress={handleShare}
               disabled={isBusy}
               activeOpacity={0.85}
@@ -295,6 +464,8 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
               >
                 {shareState === 'capturing' || shareState === 'sharing' ? (
                   <ActivityIndicator color={colors.onPrimary} size="small" />
+                ) : shareState === 'success' ? (
+                  <Text style={styles.primaryBtnText}>✓ Shared!</Text>
                 ) : (
                   <Text style={styles.primaryBtnText}>Share to Instagram Story</Text>
                 )}
@@ -302,7 +473,7 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.secondaryBtn}
+              style={[styles.secondaryBtn, isBusy && styles.btnDisabled]}
               onPress={handleSave}
               disabled={isBusy}
               activeOpacity={0.75}
@@ -313,17 +484,36 @@ export default function SharePreviewScreen({ visible, onClose, shareData, defaul
                 <Text style={styles.secondaryBtnText}>Save to Photos</Text>
               )}
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
+
+        <Toast visible={!!toast} message={toast?.message ?? ''} variant={toast?.variant ?? 'info'} />
       </SafeAreaView>
     </Modal>
   );
 }
 
+function getShareErrorMessage(error: unknown): string {
+  if (error instanceof ShareWorkoutError) {
+    switch (error.code) {
+      case 'PERMISSION_DENIED':
+        return 'Allow photo access in Settings to save images';
+      case 'CAPTURE_FAILED':
+        return 'Something went wrong. Please try again.';
+      case 'SHARE_FAILED':
+      case 'SHARING_UNAVAILABLE':
+      case 'SAVE_FAILED':
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
+  return 'Something went wrong. Please try again.';
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -352,8 +542,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '700',
   },
-
-  // Template chips
   chipsScroll: { flexGrow: 0 },
   chipsRow: {
     flexDirection: 'row',
@@ -381,7 +569,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: spacing.lg,
@@ -389,8 +576,6 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
     alignItems: 'center',
   },
-
-  // Preview
   previewShadow: {
     borderRadius: radii.lg,
     shadowColor: colors.primary,
@@ -400,8 +585,6 @@ const styles = StyleSheet.create({
     elevation: 10,
     overflow: 'hidden',
   },
-
-  // Overlay tip
   overlayTip: {
     backgroundColor: `${colors.tertiary}12`,
     borderRadius: radii.sm,
@@ -415,9 +598,10 @@ const styles = StyleSheet.create({
     color: colors.tertiary,
     textAlign: 'center',
   },
-
-  // Caption
-  captionSection: { width: '100%', gap: spacing.sm },
+  captionSection: {
+    width: '100%',
+    gap: spacing.sm,
+  },
   captionLabel: {
     fontFamily: 'Manrope-Bold',
     fontSize: 10,
@@ -440,8 +624,36 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'right',
   },
-
-  // Footer
+  captionModesRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingBottom: 2,
+  },
+  brandingRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceContainerHigh,
+  },
+  brandingTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  brandingTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: colors.text,
+  },
+  brandingHint: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: colors.textMuted,
+  },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
@@ -477,5 +689,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+  btnDisabled: {
+    opacity: 0.72,
   },
 });

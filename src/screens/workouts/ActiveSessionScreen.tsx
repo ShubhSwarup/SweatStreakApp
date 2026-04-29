@@ -36,11 +36,13 @@ export default function ActiveSessionScreen({
 }: WorkoutsScreenProps<'ActiveSession'>) {
   const {
     activeSession,
+    isLoading,
     isFinishing,
     fetchActiveSession,
     logSet,
     removeExercise,
     removePendingSet,
+    unlogCompletedSet,
     finishSession,
     pauseSession,
     discardSession,
@@ -53,6 +55,7 @@ export default function ActiveSessionScreen({
 
   const [leaveDialogVisible, setLeaveDialogVisible] = useState(false);
   const [finishDialogVisible, setFinishDialogVisible] = useState(false);
+  const [fetchedOnce, setFetchedOnce] = useState(!!activeSession);
 
   const elapsed = useSessionTimer(
     activeSession?.durationSeconds ?? 0,
@@ -61,9 +64,15 @@ export default function ActiveSessionScreen({
 
   useEffect(() => {
     if (!activeSession) {
-      fetchActiveSession();
+      fetchActiveSession().finally(() => setFetchedOnce(true));
     }
   }, []);
+
+  useEffect(() => {
+    if (fetchedOnce && !activeSession) {
+      navigation.navigate('WorkoutHub');
+    }
+  }, [fetchedOnce, activeSession, navigation]);
 
   // Navigate to hub when session transitions to paused
   useEffect(() => {
@@ -194,6 +203,7 @@ export default function ActiveSessionScreen({
         leveledUp,
         exerciseNames,
         sessionId,
+        sessionName: session.name,
       });
       setPostSessionQueue(queue);
       advancePostSessionQueue();
@@ -211,7 +221,7 @@ export default function ActiveSessionScreen({
     advancePostSessionQueue,
   ]);
 
-  if (!activeSession) {
+  if (!fetchedOnce || isLoading || !activeSession) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loading}>
@@ -287,6 +297,7 @@ export default function ActiveSessionScreen({
             onOpenCalculator={handleOpenCalculator}
             onRemove={handleRemoveExercise}
             onRemovePendingSet={(setNumber) => removePendingSet(idx, setNumber)}
+            onUnlogCompletedSet={(setNumber) => unlogCompletedSet(idx, setNumber)}
           />
         ))}
 
@@ -382,18 +393,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    gap: spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.outlineVariant,
   },
   headerLeft: {
     flex: 1,
-    gap: 3,
-    paddingHorizontal: spacing.sm,
+    gap: 2,
+    paddingHorizontal: spacing.xs,
   },
   sessionName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
   },
@@ -415,36 +427,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.textMuted,
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   exerciseCount: {
     fontSize: 10,
     fontWeight: '600',
     color: colors.textMuted,
+    letterSpacing: 0.2,
   },
   leaveBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
+    width: 38,
+    height: 38,
+    borderRadius: radii.sm,
     backgroundColor: colors.surfaceContainerHigh,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   leaveBtnText: {
-    fontSize: 20,
+    fontSize: 18,
     color: colors.textSecondary,
     fontWeight: '600',
   },
   menuBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
+    width: 38,
+    height: 38,
+    borderRadius: radii.sm,
     backgroundColor: colors.surfaceContainerHigh,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   menuIcon: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
     letterSpacing: 2,
     fontWeight: '700',

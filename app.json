@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
 
-    "platforms": ["ios", "android"],
+    "platforms": ["ios", "android", "web"],
 
     "ios": {
       "supportsTablet": false,
@@ -23,8 +23,6 @@
     "extra": {
       "apiBaseUrl": "https://sweatstreak-backend.onrender.com"
     },
-    "plugins": [
-      "expo-font"
-    ]
+    "plugins": ["expo-font"]
   }
 }

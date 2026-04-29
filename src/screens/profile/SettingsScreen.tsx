@@ -279,25 +279,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-
   section: {
     backgroundColor: colors.surfaceContainerHigh,
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     overflow: 'hidden',
-    paddingHorizontal: spacing.xl,
   },
-
-  // Generic row
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   rowLabelBox: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   rowLabel: {
     fontSize: 15,
@@ -311,44 +308,45 @@ const styles = StyleSheet.create({
   rowDivider: {
     height: 1,
     backgroundColor: colors.surfaceContainerHighest,
+    marginHorizontal: spacing.lg,
   },
 
-  // Segmented control
+  // Controls
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceContainerHighest,
-    borderRadius: radii.md,
-    padding: 3,
+    borderRadius: radii.full,
+    padding: 4,
+    gap: 4,
   },
   segmentBtn: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md - 3,
+    paddingVertical: 8,
+    borderRadius: radii.full,
   },
   segmentBtnActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: `${colors.primary}22`,
   },
   segmentBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: colors.textSecondary,
   },
   segmentBtnTextActive: {
-    color: colors.onPrimary,
+    color: colors.primary,
   },
-
-  // Rest timer
   timerOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
   },
   timerBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radii.full,
     backgroundColor: colors.surfaceContainerHighest,
-    alignItems: 'center',
   },
   timerBtnActive: {
     backgroundColor: `${colors.primary}22`,
@@ -356,69 +354,67 @@ const styles = StyleSheet.create({
   timerBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: colors.textSecondary,
   },
   timerBtnTextActive: {
     color: colors.primary,
   },
 
-  // Account rows
+  // Account
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   accountLabel: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 14,
     color: colors.textSecondary,
   },
   accountValue: {
+    flex: 1,
+    textAlign: 'right',
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,
-    flexShrink: 1,
-    textAlign: 'right',
   },
 
-  // Action rows
+  // Actions
   actionRow: {
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
   },
   actionLogout: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.error,
   },
   actionDelete: {
-    flex: 1,
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontWeight: '700',
+    color: colors.text,
   },
   comingSoonPill: {
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.full,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
   comingSoonText: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.textMuted,
-    letterSpacing: 0.5,
   },
 
-  // Version
   versionText: {
+    marginTop: spacing.lg,
+    textAlign: 'center',
     fontSize: 12,
     color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.lg,
   },
 });

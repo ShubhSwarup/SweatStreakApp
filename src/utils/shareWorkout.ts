@@ -1,60 +1,79 @@
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { log } from './logger';
 
-export async function captureCard(viewRef: React.RefObject<any>): Promise<string> {
-  return captureRef(viewRef, {
-    format: 'png',
-    quality: 1,
-    result: 'tmpfile',
-  });
+export type ShareWorkoutErrorCode =
+  | 'CAPTURE_FAILED'
+  | 'PERMISSION_DENIED'
+  | 'SHARING_UNAVAILABLE'
+  | 'SAVE_FAILED'
+  | 'SHARE_FAILED';
+
+export class ShareWorkoutError extends Error {
+  code: ShareWorkoutErrorCode;
+
+  constructor(code: ShareWorkoutErrorCode, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'ShareWorkoutError';
+  }
 }
 
-export async function shareToInstagram(imageUri: string): Promise<void> {
+export type ShareToInstagramResult = 'shared' | 'sharedViaSheet' | 'savedFallback';
+
+export async function captureCard(viewRef: React.RefObject<any>): Promise<string> {
+  try {
+    return await captureRef(viewRef, {
+      format: 'png',
+      quality: 1,
+      result: 'tmpfile',
+    });
+  } catch (err) {
+    log.error('shareWorkout', 'captureCard failed:', err);
+    throw new ShareWorkoutError('CAPTURE_FAILED', 'Could not capture the share card.');
+  }
+}
+
+export async function shareToInstagram(imageUri: string): Promise<ShareToInstagramResult> {
   const available = await Sharing.isAvailableAsync();
   if (!available) {
-    Alert.alert('Sharing unavailable', 'Sharing is not available on this device.');
-    return;
+    throw new ShareWorkoutError('SHARING_UNAVAILABLE', 'Sharing is not available on this device.');
   }
 
-  // On iOS, try the Instagram Stories native URL scheme first.
-  // This opens Instagram directly into the story composer with the image as the background asset.
-  // NOTE: In Expo Go this may not work due to sandbox restrictions — falls back to generic share sheet.
-  // TODO (Phase 12C): In a production build, use Instagram's documented background-image pasteboard API.
-  if (Platform.OS === 'ios') {
-    try {
-      const canOpen = await Linking.canOpenURL('instagram-stories://share');
-      if (canOpen) {
-        await Linking.openURL(`instagram-stories://share?backgroundImage=${encodeURIComponent(imageUri)}`);
-        return;
-      }
-    } catch (err) {
-      log.warn('shareWorkout', 'Instagram Stories scheme failed, falling back:', err);
-    }
+  const openedInstagram = await tryOpenInstagram();
+  if (openedInstagram) {
+    return 'shared';
   }
 
-  // Generic share sheet — Instagram, Messages, etc. appear as options
-  await Sharing.shareAsync(imageUri, {
-    mimeType: 'image/png',
-    dialogTitle: 'Share to Instagram Stories',
-    UTI: 'public.png',
-  });
+  try {
+    await Sharing.shareAsync(imageUri, {
+      mimeType: 'image/png',
+      dialogTitle: 'Share to Instagram Stories',
+      UTI: 'public.png',
+    });
+    return 'sharedViaSheet';
+  } catch (err) {
+    log.warn('shareWorkout', 'shareAsync failed, trying save fallback:', err);
+  }
+
+  try {
+    await saveToLibrary(imageUri);
+    return 'savedFallback';
+  } catch (err) {
+    log.error('shareWorkout', 'shareToInstagram fallback failed:', err);
+    throw new ShareWorkoutError('SHARE_FAILED', 'Could not share image to Instagram.');
+  }
 }
 
 export async function saveToLibrary(imageUri: string): Promise<boolean> {
   const { status } = await MediaLibrary.requestPermissionsAsync();
   if (status !== 'granted') {
-    Alert.alert(
-      'Permission required',
+    throw new ShareWorkoutError(
+      'PERMISSION_DENIED',
       'Allow photo access in Settings to save your card.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => Linking.openSettings() },
-      ],
     );
-    return false;
   }
 
   try {
@@ -62,7 +81,24 @@ export async function saveToLibrary(imageUri: string): Promise<boolean> {
     return true;
   } catch (err) {
     log.error('shareWorkout', 'saveToLibrary failed:', err);
-    Alert.alert('Save failed', 'Could not save image to your photo library.');
-    return false;
+    throw new ShareWorkoutError('SAVE_FAILED', 'Could not save image to your photo library.');
   }
+}
+
+async function tryOpenInstagram(): Promise<boolean> {
+  const candidates =
+    Platform.OS === 'ios'
+      ? ['instagram-stories://share', 'instagram://camera', 'instagram://app']
+      : ['instagram://story-camera', 'instagram://camera', 'instagram://app'];
+
+  for (const url of candidates) {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch (err) {
+      log.warn('shareWorkout', `Failed to open ${url}:`, err);
+    }
+  }
+
+  return false;
 }

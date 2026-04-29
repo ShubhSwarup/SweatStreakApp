@@ -23,6 +23,7 @@ export interface PostSessionData {
   leveledUp: boolean;
   exerciseNames: Record<string, string>;
   sessionId: string;
+  sessionName: string;
 }
 
 export type WeightUnit = 'kg' | 'lbs';

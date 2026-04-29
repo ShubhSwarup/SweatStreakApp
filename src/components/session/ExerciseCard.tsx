@@ -7,6 +7,7 @@ import {
   Animated,
   PanResponder,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
@@ -22,6 +23,45 @@ interface Props {
   onOpenCalculator: (weight: number) => void;
   onRemove: (exerciseIndex: number) => void;
   onRemovePendingSet: (setNumber: number) => Promise<void>;
+  onUnlogCompletedSet: (setNumber: number) => Promise<void>;
+}
+
+type CardMetrics = {
+  cardPadding: number;
+  rowGap: number;
+  setNumWidth: number;
+  checkSize: number;
+  headerFontSize: number;
+};
+
+function getCardMetrics(screenWidth: number): CardMetrics {
+  if (screenWidth <= 350) {
+    return {
+      cardPadding: 14,
+      rowGap: 4,
+      setNumWidth: 24,
+      checkSize: 44,
+      headerFontSize: 16,
+    };
+  }
+
+  if (screenWidth <= 390) {
+    return {
+      cardPadding: 16,
+      rowGap: 6,
+      setNumWidth: 26,
+      checkSize: 48,
+      headerFontSize: 16,
+    };
+  }
+
+  return {
+    cardPadding: 20,
+    rowGap: spacing.sm,
+    setNumWidth: 28,
+    checkSize: 52,
+    headerFontSize: 17,
+  };
 }
 
 export default function ExerciseCard({
@@ -31,7 +71,11 @@ export default function ExerciseCard({
   onOpenCalculator,
   onRemove,
   onRemovePendingSet,
+  onUnlogCompletedSet,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const metrics = getCardMetrics(width);
+
   const [isLoggingSet, setIsLoggingSet] = useState(false);
   const [extraSetCount, setExtraSetCount] = useState(0);
 
@@ -79,48 +123,54 @@ export default function ExerciseCard({
     setIsLoggingSet(true);
     try {
       await onLogSet(exerciseIndex, data);
-      setExtraSetCount(c => Math.max(0, c - 1));
+      setExtraSetCount((c) => Math.max(0, c - 1));
     } finally {
       setIsLoggingSet(false);
     }
   };
 
   const handleRemoveExtraSet = () => {
-    setExtraSetCount(c => Math.max(0, c - 1));
+    setExtraSetCount((c) => Math.max(0, c - 1));
   };
 
-  const completedSets = exercise.sets.filter(s => s.completed);
-  const incompleteSets = exercise.sets.filter(s => !s.completed);
+  const completedSets = exercise.sets.filter((s) => s.completed);
+  const incompleteSets = exercise.sets.filter((s) => !s.completed);
 
   const totalVolume = completedSets.reduce((acc, s) => {
     if (s.weight != null && s.reps != null) return acc + s.weight * s.reps;
     return acc;
   }, 0);
 
-  const suggestedWeight =
-    exercise.suggestion?.weight ?? exercise.lastPerformance?.weight ?? null;
-  const suggestedReps =
-    exercise.suggestion?.reps ?? exercise.lastPerformance?.reps ?? null;
+  const suggestedWeight = exercise.suggestion?.weight ?? exercise.lastPerformance?.weight ?? null;
+  const suggestedReps = exercise.suggestion?.reps ?? exercise.lastPerformance?.reps ?? null;
 
   const displayName = exercise.name || 'Exercise';
-  if (!exercise.name) log.warn('ExerciseCard', 'exercise.name empty for exerciseId=%s', exercise.exerciseId);
+  if (!exercise.name) {
+    log.warn('ExerciseCard', 'exercise.name empty for exerciseId=%s', exercise.exerciseId);
+  }
   const trackingLabel = exercise.trackingType?.toUpperCase() ?? 'REPS';
 
   return (
     <View style={styles.swipeContainer}>
-      {/* Delete backdrop */}
       <TouchableOpacity style={styles.deleteBtn} onPress={handleRemoveExercise}>
         <Text style={styles.deleteBtnText}>Remove</Text>
       </TouchableOpacity>
 
       <Animated.View
-        style={[styles.card, { transform: [{ translateX }] }]}
+        style={[
+          styles.card,
+          {
+            padding: metrics.cardPadding,
+          },
+          { transform: [{ translateX }] },
+        ]}
         {...panResponder.panHandlers}
       >
-        {/* Exercise header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { gap: metrics.rowGap }]}>
           <View style={styles.headerLeft}>
-            <Text style={styles.exerciseName}>{displayName}</Text>
+            <Text style={[styles.exerciseName, { fontSize: metrics.headerFontSize }]}>
+              {displayName}
+            </Text>
             <Text style={styles.muscleTag}>
               {trackingLabel}
               {exercise.lastPerformance && (
@@ -157,7 +207,6 @@ export default function ExerciseCard({
           )}
         </View>
 
-        {/* Progress dots */}
         <View style={styles.progressDotsRow}>
           {exercise.sets.map((s, i) => (
             <View
@@ -167,9 +216,8 @@ export default function ExerciseCard({
           ))}
         </View>
 
-        {/* Set column headers — widths must mirror the SetRow layout constants */}
-        <View style={styles.setHeaderRow}>
-          <Text style={styles.setHeaderNum}>#</Text>
+        <View style={[styles.setHeaderRow, { gap: metrics.rowGap }]}>
+          <Text style={[styles.setHeaderNum, { width: metrics.setNumWidth }]}>#</Text>
           {exercise.trackingType === 'reps' && (
             <>
               <Text style={styles.setHeaderLabel}>WEIGHT (kg)</Text>
@@ -182,11 +230,9 @@ export default function ExerciseCard({
           {exercise.trackingType === 'distance' && (
             <Text style={styles.setHeaderLabel}>DISTANCE (km)</Text>
           )}
-          {/* 52px mirrors CHECK_SIZE so "DONE" sits above the ✓ button */}
-          <Text style={styles.setHeaderDone}>DONE</Text>
+          <Text style={[styles.setHeaderDone, { width: metrics.checkSize }]}>DONE</Text>
         </View>
 
-        {/* Completed sets — read-only, positional # */}
         {completedSets.map((s, idx) => (
           <SetRow
             key={`done-${s.setNumber}`}
@@ -194,10 +240,10 @@ export default function ExerciseCard({
             set={s}
             trackingType={exercise.trackingType}
             onComplete={handleLogPendingSet}
+            onUnlog={() => onUnlogCompletedSet(s.setNumber)}
           />
         ))}
 
-        {/* Pending sets — removable via backend DELETE */}
         {incompleteSets.map((set, localIdx) => (
           <SetRow
             key={`pending-${set.setNumber}`}
@@ -215,7 +261,6 @@ export default function ExerciseCard({
           />
         ))}
 
-        {/* User-added extra sets — removable; decrement count after logging */}
         {Array.from({ length: extraSetCount }, (_, i) => {
           const setNum = completedSets.length + incompleteSets.length + i + 1;
           return (
@@ -236,10 +281,9 @@ export default function ExerciseCard({
           );
         })}
 
-        {/* Add set */}
         <TouchableOpacity
           style={styles.addSetBtn}
-          onPress={() => setExtraSetCount(c => c + 1)}
+          onPress={() => setExtraSetCount((c) => c + 1)}
         >
           <Text style={styles.addSetText}>+ Add Set</Text>
         </TouchableOpacity>
@@ -273,24 +317,20 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii.md,
-    padding: 20,
-    gap: 2,
+    gap: spacing.xs,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
-    gap: spacing.sm,
   },
   headerLeft: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   exerciseName: {
-    fontSize: 17,
     fontWeight: '800',
     color: colors.text,
   },
@@ -299,18 +339,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textMuted,
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   volumeSummary: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   suggestionBadge: {
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: radii.full,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    flexShrink: 0,
   },
   suggestionIncrease: {
     backgroundColor: `${colors.primary}22`,
@@ -321,8 +364,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     letterSpacing: 0.3,
   },
-
-  // Progress dots
   progressDotsRow: {
     flexDirection: 'row',
     gap: 6,
@@ -337,41 +378,37 @@ const styles = StyleSheet.create({
   progressDotActive: {
     backgroundColor: colors.primary,
   },
-
-  // Set headers — widths must mirror SetRow layout constants (SET_NUM_W=28, CHECK_SIZE=52)
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     paddingBottom: 6,
     paddingTop: 4,
   },
   setHeaderNum: {
-    width: 28,
     fontSize: 10,
     fontWeight: '700',
     color: colors.textMuted,
     letterSpacing: 0.5,
     textAlign: 'center',
+    flexShrink: 0,
   },
   setHeaderLabel: {
     flex: 1,
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  // Mirrors CHECK_SIZE (52px) so "DONE" sits directly above the ✓ button
-  setHeaderDone: {
-    width: 52,
+    minWidth: 0,
     fontSize: 10,
     fontWeight: '700',
     color: colors.textMuted,
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-
-  // Add set
+  setHeaderDone: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    flexShrink: 0,
+  },
   addSetBtn: {
     marginTop: spacing.sm,
     height: 48,

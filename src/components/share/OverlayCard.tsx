@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import { colors } from '../../constants/colors';
 import { radii } from '../../constants/spacing';
 import { CARD_W, CARD_H } from './PRCard';
@@ -8,31 +9,36 @@ import { CARD_W, CARD_H } from './PRCard';
 export interface OverlayCardProps {
   exercise: string;
   weight: number;
-  reps: number;
-  prBadge?: string;       // "+5 KG" — shown if provided
+  reps?: number;
+  prBadge?: string;
   volume: number;
   sets: number;
-  duration: number;       // minutes
+  duration: number;
   streak: number;
   level: string;
   intensity: boolean;
+  showBranding?: boolean;
 }
 
-// Glassmorphism helper — BlurView + semi-transparent container
 function GlassModule({
   children,
   style,
   intensity = 20,
+  delay = 0,
 }: {
   children: React.ReactNode;
   style?: object;
   intensity?: number;
+  delay?: number;
 }) {
   return (
-    <View style={[styles.glassOuter, style]}>
+    <Animated.View
+      entering={FadeInUp.duration(220).delay(delay)}
+      style={[styles.glassOuter, style]}
+    >
       <BlurView intensity={intensity} tint="dark" style={StyleSheet.absoluteFill} />
       <View style={styles.glassInner}>{children}</View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -47,31 +53,35 @@ export default function OverlayCard({
   streak,
   level,
   intensity,
+  showBranding = true,
 }: OverlayCardProps) {
   const volumeLabel = volume >= 1000 ? `${(volume / 1000).toFixed(1)}T` : `${Math.round(volume)} KG`;
+  const heroText = reps != null ? `${weight}KG × ${reps}` : `${weight}KG`;
 
   return (
-    // Transparent root — background comes from user's photo in Instagram Stories
     <View style={styles.root}>
+      {showBranding && (
+        <View style={styles.brandBadge}>
+          <View style={styles.brandDot} />
+          <Text style={styles.brandText}>SWEATSTREAK</Text>
+        </View>
+      )}
 
-      {/* MODULE 1 — Streak badge (top-right) */}
-      <GlassModule style={styles.mod1} intensity={18}>
+      <GlassModule style={styles.mod1} intensity={18} delay={0}>
         <Text style={styles.mod1Text}>🔥 {streak} DAY STREAK</Text>
       </GlassModule>
 
-      {/* MODULE 2 — Main PR card (center, offset left) */}
-      <GlassModule style={styles.mod2} intensity={24}>
+      <GlassModule style={styles.mod2} intensity={24} delay={80}>
         {prBadge && (
           <View style={styles.prBadge}>
             <Text style={styles.prBadgeText}>{prBadge} PR</Text>
           </View>
         )}
         <Text style={styles.mod2Exercise}>{exercise}</Text>
-        <Text style={styles.mod2Hero}>{weight}KG × {reps}</Text>
+        <Text style={styles.mod2Hero}>{heroText}</Text>
       </GlassModule>
 
-      {/* MODULE 3 — Stats row (bottom third) */}
-      <GlassModule style={styles.mod3} intensity={22}>
+      <GlassModule style={styles.mod3} intensity={22} delay={160}>
         <StatModule icon="⚖️" value={volumeLabel} label="VOLUME" />
         <View style={styles.statRowDivider} />
         <StatModule icon="📋" value={`${sets}`} label="SETS" />
@@ -79,18 +89,15 @@ export default function OverlayCard({
         <StatModule icon="⏱" value={`${duration}M`} label="DURATION" />
       </GlassModule>
 
-      {/* MODULE 4 — Intensity badge (below stats) */}
       {intensity && (
-        <GlassModule style={styles.mod4} intensity={16}>
-          <Text style={styles.mod4Text}>⚡ HIGH INTENSITY SESSION</Text>
+        <GlassModule style={styles.mod4} intensity={16} delay={240}>
+          <Text style={styles.mod4Text}>HIGH INTENSITY SESSION</Text>
         </GlassModule>
       )}
 
-      {/* MODULE 5 — Level badge (bottom-left) */}
-      <GlassModule style={styles.mod5} intensity={16}>
+      <GlassModule style={styles.mod5} intensity={16} delay={intensity ? 320 : 240}>
         <Text style={styles.mod5Text}>⭐ LEVEL: {level}</Text>
       </GlassModule>
-
     </View>
   );
 }
@@ -106,14 +113,37 @@ function StatModule({ icon, value, label }: { icon: string; value: string; label
 }
 
 const styles = StyleSheet.create({
-  // Transparent root — no background, full Stories dimensions
   root: {
     width: CARD_W,
     height: CARD_H,
     backgroundColor: 'transparent',
   },
-
-  // Shared glass module shell
+  brandBadge: {
+    position: 'absolute',
+    top: 56,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(13,15,13,0.48)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  brandDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  brandText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 11,
+    color: colors.primary,
+    letterSpacing: 1.4,
+  },
   glassOuter: {
     position: 'absolute',
     borderRadius: 20,
@@ -130,8 +160,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30,32,29,0.40)',
     padding: 14,
   },
-
-  // MODULE 1 — Streak pill (top-right)
   mod1: {
     top: 56,
     right: 20,
@@ -144,8 +172,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-
-  // MODULE 2 — Main PR card (center-left)
   mod2: {
     top: '32%',
     left: 20,
@@ -181,8 +207,6 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     letterSpacing: 0.5,
   },
-
-  // MODULE 3 — Stats row
   mod3: {
     bottom: 160,
     left: 20,
@@ -218,8 +242,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 1.2,
   },
-
-  // MODULE 4 — Intensity badge
   mod4: {
     bottom: 100,
     left: 20,
@@ -231,8 +253,6 @@ const styles = StyleSheet.create({
     color: colors.tertiary,
     letterSpacing: 1,
   },
-
-  // MODULE 5 — Level badge
   mod5: {
     bottom: 48,
     left: 20,

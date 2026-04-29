@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigationState } from '@react-navigation/native';
 import { useSessionStore } from '../../store/sessionStore';
 import { useSessionTimer, formatElapsed } from '../../hooks/useSessionTimer';
 import { navigationRef } from '../../utils/navigation';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
-import { useNavigationState } from '@react-navigation/native';
 
 function getDeepRouteName(state: any): string {
   if (!state) return '';
