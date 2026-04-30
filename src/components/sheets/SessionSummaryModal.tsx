@@ -120,6 +120,11 @@ export default function SessionSummaryModal() {
 
   const handleViewDetails = () => {
     dismiss();
+    // Seed ProgressHub into the stack first so back returns to it
+    navigationRef.navigate('Main', {
+      screen: 'ProgressTab',
+      params: { screen: 'ProgressHub' },
+    });
     navigationRef.navigate('Main', {
       screen: 'ProgressTab',
       params: { screen: 'PastSessionDetail', params: { sessionId } },

@@ -6,23 +6,42 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-
+    "icon": "./assets/icon.png",
     "platforms": ["ios", "android", "web"],
-
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sweatstreak.app"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#0d0f0d"
-      },
       "package": "com.sweatstreak.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d0f0d"
+      }
     },
     "extra": {
-      "apiBaseUrl": "https://sweatstreak-backend.onrender.com"
+      "apiBaseUrl": "https://sweatstreak-backend.onrender.com",
+      "eas": {
+        "projectId": "3bc96561-93f3-4d18-8e35-45361f318844"
+      }
     },
-    "plugins": ["expo-font"]
+    "plugins": [
+      "expo-font",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow SweatStreak to save your workout cards to your photo library.",
+          "saveToPhotosPermission": "Allow SweatStreak to save workout cards to Photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
+    "owner": "shubh95"
   }
 }

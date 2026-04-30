@@ -37,7 +37,7 @@ type CardMetrics = {
 function getCardMetrics(screenWidth: number): CardMetrics {
   if (screenWidth <= 350) {
     return {
-      cardPadding: 14,
+      cardPadding: 16,
       rowGap: 4,
       setNumWidth: 24,
       checkSize: 44,
@@ -47,7 +47,7 @@ function getCardMetrics(screenWidth: number): CardMetrics {
 
   if (screenWidth <= 390) {
     return {
-      cardPadding: 16,
+      cardPadding: 18,
       rowGap: 6,
       setNumWidth: 26,
       checkSize: 48,
@@ -56,7 +56,7 @@ function getCardMetrics(screenWidth: number): CardMetrics {
   }
 
   return {
-    cardPadding: 20,
+    cardPadding: 22,
     rowGap: spacing.sm,
     setNumWidth: 28,
     checkSize: 52,
@@ -166,6 +166,7 @@ export default function ExerciseCard({
         ]}
         {...panResponder.panHandlers}
       >
+        <View style={styles.accentStrip} pointerEvents="none" />
         <View style={[styles.header, { gap: metrics.rowGap }]}>
           <View style={styles.headerLeft}>
             <Text style={[styles.exerciseName, { fontSize: metrics.headerFontSize }]}>
@@ -233,10 +234,10 @@ export default function ExerciseCard({
           <Text style={[styles.setHeaderDone, { width: metrics.checkSize }]}>DONE</Text>
         </View>
 
-        {completedSets.map((s, idx) => (
+        {completedSets.map((s) => (
           <SetRow
             key={`done-${s.setNumber}`}
-            setNumber={idx + 1}
+            setNumber={s.setNumber}
             set={s}
             trackingType={exercise.trackingType}
             onComplete={handleLogPendingSet}
@@ -244,25 +245,31 @@ export default function ExerciseCard({
           />
         ))}
 
-        {incompleteSets.map((set, localIdx) => (
-          <SetRow
-            key={`pending-${set.setNumber}`}
-            setNumber={completedSets.length + localIdx + 1}
-            set={set}
-            trackingType={exercise.trackingType}
-            suggestedWeight={suggestedWeight}
-            suggestedReps={suggestedReps}
-            onComplete={handleLogPendingSet}
-            onRemove={() => onRemovePendingSet(set.setNumber)}
-            onOpenCalculator={
-              exercise.trackingType === 'reps' ? onOpenCalculator : undefined
-            }
-            isCompleting={isLoggingSet}
-          />
-        ))}
+        {incompleteSets.map((set, localIdx) => {
+          const isActive = localIdx === 0;
+          return (
+            <SetRow
+              key={`pending-${set.setNumber}`}
+              setNumber={set.setNumber}
+              set={set}
+              trackingType={exercise.trackingType}
+              suggestedWeight={suggestedWeight}
+              suggestedReps={suggestedReps}
+              onComplete={handleLogPendingSet}
+              onRemove={() => onRemovePendingSet(set.setNumber)}
+              onOpenCalculator={
+                exercise.trackingType === 'reps' ? onOpenCalculator : undefined
+              }
+              isCompleting={isActive && isLoggingSet}
+              isUpcoming={!isActive}
+            />
+          );
+        })}
 
         {Array.from({ length: extraSetCount }, (_, i) => {
           const setNum = completedSets.length + incompleteSets.length + i + 1;
+          // Extra sets are only active once all template pending sets are done
+          const isActive = incompleteSets.length === 0 && i === 0;
           return (
             <SetRow
               key={`extra-${i}`}
@@ -276,7 +283,8 @@ export default function ExerciseCard({
               onOpenCalculator={
                 exercise.trackingType === 'reps' ? onOpenCalculator : undefined
               }
-              isCompleting={isLoggingSet}
+              isCompleting={isActive && isLoggingSet}
+              isUpcoming={!isActive}
             />
           );
         })}
@@ -295,7 +303,6 @@ export default function ExerciseCard({
 const styles = StyleSheet.create({
   swipeContainer: {
     position: 'relative',
-    marginBottom: spacing.md,
   },
   deleteBtn: {
     position: 'absolute',
@@ -317,22 +324,39 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii.md,
-    gap: spacing.xs,
+    gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  accentStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    borderTopLeftRadius: radii.md,
+    borderBottomLeftRadius: radii.md,
+    backgroundColor: colors.primary,
+    opacity: 0.7,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   headerLeft: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: 5,
   },
   exerciseName: {
     fontWeight: '800',
     color: colors.text,
+    letterSpacing: 0.1,
   },
   muscleTag: {
     fontSize: 11,
@@ -342,7 +366,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   volumeSummary: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.3,
@@ -356,7 +380,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   suggestionIncrease: {
-    backgroundColor: `${colors.primary}22`,
+    backgroundColor: `${colors.primary}18`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}35`,
   },
   suggestionText: {
     fontSize: 12,
@@ -366,23 +392,28 @@ const styles = StyleSheet.create({
   },
   progressDotsRow: {
     flexDirection: 'row',
-    gap: 6,
-    paddingVertical: 6,
+    gap: 7,
+    paddingVertical: 4,
   },
   progressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.outlineVariant,
   },
   progressDotActive: {
     backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 2,
   },
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 6,
-    paddingTop: 4,
+    paddingBottom: 4,
+    paddingTop: 2,
   },
   setHeaderNum: {
     fontSize: 10,
@@ -410,10 +441,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   addSetBtn: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     height: 48,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surfaceContainerHighest,
+    borderRadius: 12,
+    backgroundColor: `${colors.primary}0D`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}28`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -421,6 +454,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
 });

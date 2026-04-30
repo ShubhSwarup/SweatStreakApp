@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -99,6 +99,18 @@ function ExerciseSection({ exercise, sessionPRs }: {
   );
 }
 
+function SkippedExerciseRow({ exercise }: { exercise: SessionDetailExercise }) {
+  const name = typeof exercise.exercise === 'object' ? exercise.exercise.name : 'Exercise';
+  return (
+    <View style={styles.skippedRow}>
+      <Text style={styles.skippedName}>{name}</Text>
+      <View style={styles.skippedBadge}>
+        <Text style={styles.skippedBadgeText}>SKIPPED</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function PastSessionDetailScreen({ navigation, route }: ProgressScreenProps<'PastSessionDetail'>) {
   const { sessionId } = route.params;
   const { currentSession, isSessionLoading, fetchSessionById } = useProgressStore();
@@ -167,10 +179,32 @@ export default function PastSessionDetailScreen({ navigation, route }: ProgressS
         )}
 
         {/* Exercise breakdown */}
-        <Text style={styles.sectionLabel}>EXERCISES</Text>
-        {session.exercises.map((ex, i) => (
-          <ExerciseSection key={i} exercise={ex} sessionPRs={prs} />
-        ))}
+        {(() => {
+          const done = session.exercises.filter(ex => ex.sets.filter(s => s.completed).length > 0);
+          const skipped = session.exercises.filter(ex => ex.sets.filter(s => s.completed).length === 0);
+          return (
+            <>
+              {done.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>EXERCISES</Text>
+                  {done.map((ex, i) => (
+                    <ExerciseSection key={i} exercise={ex} sessionPRs={prs} />
+                  ))}
+                </>
+              )}
+              {skipped.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>SKIPPED ({skipped.length})</Text>
+                  <View style={styles.skippedCard}>
+                    {skipped.map((ex, i) => (
+                      <SkippedExerciseRow key={i} exercise={ex} />
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
+          );
+        })()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -219,30 +253,38 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     padding: spacing.lg,
     gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   statPill: {
     flex: 1,
     alignItems: 'center',
-    gap: 3,
+    gap: 5,
   },
   statValue: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   statLabel: {
     fontSize: 9,
     fontWeight: '700',
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     textAlign: 'center',
   },
 
   // PR summary
   prSummaryCard: {
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: `${colors.primary}0F`,
     borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: `${colors.primary}25`,
     padding: spacing.lg,
     gap: spacing.sm,
   },
@@ -250,7 +292,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.primary,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   prBadgeRow: {
     flexDirection: 'row',
@@ -272,7 +314,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii.xl,
     padding: spacing.lg,
-    gap: spacing.sm,
+    gap: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -283,9 +330,10 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     flex: 1,
+    letterSpacing: 0.1,
   },
   prRow: {
     flexDirection: 'row',
@@ -293,11 +341,45 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   exerciseSummary: {
-    paddingBottom: 4,
+    paddingBottom: 2,
   },
   exerciseSummaryText: {
     fontSize: 12,
     color: colors.textSecondary,
+    fontWeight: '500',
+  },
+
+  // Skipped exercises
+  skippedCard: {
+    backgroundColor: colors.surfaceContainerHigh,
+    borderRadius: radii.xl,
+    paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  skippedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  skippedName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    flex: 1,
+  },
+  skippedBadge: {
+    backgroundColor: `${colors.warning}18`,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  skippedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.warning,
+    letterSpacing: 1,
   },
 
   // Set row
@@ -305,8 +387,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceContainerHighest,
-    borderRadius: radii.sm,
-    paddingVertical: spacing.sm,
+    borderRadius: 10,
+    paddingVertical: 10,
     paddingHorizontal: spacing.md,
     gap: spacing.md,
   },
@@ -325,7 +407,7 @@ const styles = StyleSheet.create({
   },
   setValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
 });

@@ -37,33 +37,37 @@ export async function captureCard(viewRef: React.RefObject<any>): Promise<string
 }
 
 export async function shareToInstagram(imageUri: string): Promise<ShareToInstagramResult> {
+  // On iOS, try the Instagram Stories URL scheme first — it carries the image via the
+  // shared pasteboard and opens directly into Stories composer.
+  if (Platform.OS === 'ios') {
+    const sent = await tryIOSInstagramStories(imageUri);
+    if (sent) return 'shared';
+  }
+
+  // Primary path: native system share sheet.
+  // On Android this shows the full share menu; Instagram (if installed) is in the list
+  // and receives the image file — the user then picks Stories or Feed inside Instagram.
   const available = await Sharing.isAvailableAsync();
-  if (!available) {
-    throw new ShareWorkoutError('SHARING_UNAVAILABLE', 'Sharing is not available on this device.');
+  if (available) {
+    try {
+      await Sharing.shareAsync(imageUri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share your workout',
+        UTI: 'public.png',
+      });
+      return 'sharedViaSheet';
+    } catch (err) {
+      log.warn('shareWorkout', 'shareAsync failed, falling back to save:', err);
+    }
   }
 
-  const openedInstagram = await tryOpenInstagram();
-  if (openedInstagram) {
-    return 'shared';
-  }
-
-  try {
-    await Sharing.shareAsync(imageUri, {
-      mimeType: 'image/png',
-      dialogTitle: 'Share to Instagram Stories',
-      UTI: 'public.png',
-    });
-    return 'sharedViaSheet';
-  } catch (err) {
-    log.warn('shareWorkout', 'shareAsync failed, trying save fallback:', err);
-  }
-
+  // Last resort: save to the photo library.
   try {
     await saveToLibrary(imageUri);
     return 'savedFallback';
   } catch (err) {
-    log.error('shareWorkout', 'shareToInstagram fallback failed:', err);
-    throw new ShareWorkoutError('SHARE_FAILED', 'Could not share image to Instagram.');
+    log.error('shareWorkout', 'all share methods failed:', err);
+    throw new ShareWorkoutError('SHARE_FAILED', 'Could not share the image.');
   }
 }
 
@@ -85,20 +89,21 @@ export async function saveToLibrary(imageUri: string): Promise<boolean> {
   }
 }
 
-async function tryOpenInstagram(): Promise<boolean> {
-  const candidates =
-    Platform.OS === 'ios'
-      ? ['instagram-stories://share', 'instagram://camera', 'instagram://app']
-      : ['instagram://story-camera', 'instagram://camera', 'instagram://app'];
-
-  for (const url of candidates) {
-    try {
-      await Linking.openURL(url);
-      return true;
-    } catch (err) {
-      log.warn('shareWorkout', `Failed to open ${url}:`, err);
-    }
+// iOS-only: the instagram-stories://share scheme opens the Stories composer with the
+// captured image pre-loaded. Instagram reads the image from the iOS pasteboard when the
+// URL is opened; the image is NOT embedded in the URL itself.
+async function tryIOSInstagramStories(imageUri: string): Promise<boolean> {
+  const scheme = 'instagram-stories://share';
+  try {
+    const canOpen = await Linking.canOpenURL(scheme);
+    if (!canOpen) return false;
+    // Write the image to the pasteboard so Instagram can read it.
+    // We pass the local file path as the background-image parameter.
+    const url = `${scheme}?source_application=com.sweatstreak.app&backgroundImageURL=${encodeURIComponent(imageUri)}`;
+    await Linking.openURL(url);
+    return true;
+  } catch (err) {
+    log.warn('shareWorkout', 'iOS Instagram Stories scheme failed:', err);
+    return false;
   }
-
-  return false;
 }

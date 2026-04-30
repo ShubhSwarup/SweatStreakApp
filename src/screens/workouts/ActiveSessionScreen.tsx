@@ -393,21 +393,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLow,
   },
   headerLeft: {
     flex: 1,
-    gap: 2,
+    gap: 3,
     paddingHorizontal: spacing.xs,
   },
   sessionName: {
     fontSize: 15,
     fontWeight: '800',
     color: colors.text,
+    letterSpacing: 0.1,
   },
   statusRow: {
     flexDirection: 'row',
@@ -415,9 +415,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
   },
   statusDotPaused: {
@@ -436,10 +436,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   leaveBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surfaceContainerHigh,
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    backgroundColor: colors.surfaceContainerHighest,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -447,19 +447,19 @@ const styles = StyleSheet.create({
   leaveBtnText: {
     fontSize: 18,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   menuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surfaceContainerHigh,
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    backgroundColor: colors.surfaceContainerHighest,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   menuIcon: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     letterSpacing: 2,
     fontWeight: '700',
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.lg,
     paddingBottom: spacing['4xl'],
-    gap: spacing.md,
+    gap: spacing.lg,
   },
 
   // Empty
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: colors.text,
   },
   emptySub: {
     fontSize: 14,
@@ -495,20 +495,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: `${colors.primary}0C`,
     borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: `${colors.primary}28`,
     height: 60,
-    marginTop: spacing.xs,
   },
   addExerciseIcon: {
     fontSize: 22,
     color: colors.primary,
-    fontWeight: '700',
+    fontWeight: '300',
   },
   addExerciseText: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.primary,
+    letterSpacing: 0.3,
   },
 
   // Footer
@@ -516,8 +518,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLow,
   },
 
   // Finish confirm

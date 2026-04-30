@@ -31,6 +31,7 @@ interface Props {
   onUnlog?: () => void;
   onOpenCalculator?: (weight: number) => void;
   isCompleting?: boolean;
+  isUpcoming?: boolean;
 }
 
 type LayoutMetrics = {
@@ -56,8 +57,8 @@ function getLayoutMetrics(screenWidth: number): LayoutMetrics {
       removeSize: 22,
       rowGap: 4,
       inputFontSize: 14,
-      completedFontSize: 13,
-      completedLineHeight: 18,
+      completedFontSize: 14,
+      completedLineHeight: 20,
       labelFontSize: 11,
     };
   }
@@ -71,8 +72,8 @@ function getLayoutMetrics(screenWidth: number): LayoutMetrics {
       removeSize: 22,
       rowGap: 6,
       inputFontSize: 15,
-      completedFontSize: 14,
-      completedLineHeight: 19,
+      completedFontSize: 15,
+      completedLineHeight: 21,
       labelFontSize: 12,
     };
   }
@@ -85,8 +86,8 @@ function getLayoutMetrics(screenWidth: number): LayoutMetrics {
     removeSize: 24,
     rowGap: spacing.sm,
     inputFontSize: 16,
-    completedFontSize: 15,
-    completedLineHeight: 21,
+    completedFontSize: 16,
+    completedLineHeight: 22,
     labelFontSize: 12,
   };
 }
@@ -125,6 +126,7 @@ export default function SetRow({
   onUnlog,
   onOpenCalculator,
   isCompleting = false,
+  isUpcoming = false,
 }: Props) {
   const { width } = useWindowDimensions();
   const metrics = getLayoutMetrics(width);
@@ -202,7 +204,7 @@ export default function SetRow({
   };
 
   const handleComplete = () => {
-    if (isCompleted || isCompleting) return;
+    if (isCompleted || isCompleting || isUpcoming) return;
     const data = validate();
     if (!data) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -477,14 +479,15 @@ export default function SetRow({
           <TouchableOpacity
             style={[
               styles.checkBtn,
-              isCompleting && styles.checkBtnDisabled,
+              (isCompleting || isUpcoming) && styles.checkBtnDisabled,
+              isUpcoming && styles.checkBtnUpcoming,
               {
                 width: metrics.checkSize,
                 height: metrics.checkSize,
               },
             ]}
             onPress={handleComplete}
-            disabled={isCompleting}
+            disabled={isCompleting || isUpcoming}
             activeOpacity={0.75}
           >
             <Text style={styles.checkBtnIcon}>{isCompleting ? '…' : '✓'}</Text>
@@ -542,9 +545,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   completedText: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     flexShrink: 1,
+    letterSpacing: 0.2,
   },
   completedUnit: {
     fontWeight: '400',
@@ -554,10 +558,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: colors.primary,
+    letterSpacing: 0.3,
   },
   checkDone: {
     borderRadius: radii.full,
-    backgroundColor: `${colors.primary}25`,
+    backgroundColor: `${colors.primary}20`,
+    borderWidth: 1.5,
+    borderColor: `${colors.primary}55`,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -579,7 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceContainerHighest,
-    borderRadius: radii.sm,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   pillFull: {
@@ -645,9 +652,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 5,
   },
   checkBtnDisabled: {
     opacity: 0.45,
+  },
+  checkBtnUpcoming: {
+    opacity: 0.25,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   checkBtnIcon: {
     fontSize: 18,
