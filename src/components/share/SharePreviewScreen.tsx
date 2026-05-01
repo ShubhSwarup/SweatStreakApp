@@ -215,7 +215,7 @@ export default function SharePreviewScreen({
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       setShareState('sharing');
-      const result = await shareToInstagram(uri);
+      const result = await shareToInstagram(uri, template === 'overlay');
 
       if (result === 'savedFallback') {
         setShareState('idle');

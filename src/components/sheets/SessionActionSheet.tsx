@@ -13,6 +13,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { navigationRef } from '../../utils/navigation';
 import { colors } from '../../constants/colors';
 import { radii, spacing } from '../../constants/spacing';
+import { log } from '../../utils/logger';
 
 export default function SessionActionSheet() {
   const { activeOverlay, closeOverlay } = useUIStore();
@@ -28,15 +29,15 @@ export default function SessionActionSheet() {
     setIsPausing(true);
     try {
       await pauseSession();
+    } catch (err) {
+      log.error('SessionActionSheet', 'pauseSession failed:', err);
+    } finally {
+      setIsPausing(false);
       closeOverlay();
       navigationRef.navigate('Main', {
         screen: 'WorkoutsTab',
         params: { screen: 'WorkoutHub' },
       });
-    } catch (err) {
-      console.error('[SessionActionSheet] pauseSession failed:', err);
-    } finally {
-      setIsPausing(false);
     }
   };
 
@@ -45,14 +46,14 @@ export default function SessionActionSheet() {
     try {
       await discardSession();
     } catch (err) {
-      console.error('[SessionActionSheet] discardSession failed:', err);
+      log.error('SessionActionSheet', 'discardSession failed:', err);
     } finally {
       setIsDiscarding(false);
       setDiscardConfirmVisible(false);
       closeOverlay();
       navigationRef.navigate('Main', {
-        screen: 'DashboardTab',
-        params: { screen: 'Dashboard' },
+        screen: 'WorkoutsTab',
+        params: { screen: 'WorkoutHub' },
       });
     }
   };

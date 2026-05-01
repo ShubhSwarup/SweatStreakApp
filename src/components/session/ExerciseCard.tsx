@@ -24,6 +24,8 @@ interface Props {
   onRemove: (exerciseIndex: number) => void;
   onRemovePendingSet: (setNumber: number) => Promise<void>;
   onUnlogCompletedSet: (setNumber: number) => Promise<void>;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 type CardMetrics = {
@@ -72,6 +74,8 @@ export default function ExerciseCard({
   onRemove,
   onRemovePendingSet,
   onUnlogCompletedSet,
+  onMoveUp,
+  onMoveDown,
 }: Props) {
   const { width } = useWindowDimensions();
   const metrics = getCardMetrics(width);
@@ -204,6 +208,30 @@ export default function ExerciseCard({
                 {exercise.suggestion.action === 'increase' ? '↑' : '→'}{' '}
                 {exercise.suggestion.weight}kg
               </Text>
+            </View>
+          )}
+          {(onMoveUp !== undefined || onMoveDown !== undefined) && (
+            <View style={styles.moveControls}>
+              {onMoveUp !== undefined && (
+                <TouchableOpacity
+                  style={styles.moveBtn}
+                  onPress={onMoveUp}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.moveBtnText}>↑</Text>
+                </TouchableOpacity>
+              )}
+              {onMoveDown !== undefined && (
+                <TouchableOpacity
+                  style={styles.moveBtn}
+                  onPress={onMoveDown}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.moveBtnText}>↓</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -455,5 +483,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
     letterSpacing: 0.4,
+  },
+  moveControls: {
+    flexDirection: 'row',
+    gap: 4,
+    flexShrink: 0,
+  },
+  moveBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moveBtnText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    lineHeight: 18,
   },
 });

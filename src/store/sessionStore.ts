@@ -39,6 +39,7 @@ interface SessionActions {
   removeExercise: (exerciseIndex: number) => Promise<void>;
   removePendingSet: (exerciseIndex: number, setNumber: number) => Promise<void>;
   unlogCompletedSet: (exerciseIndex: number, setNumber: number) => Promise<void>;
+  reorderExercise: (fromIndex: number, toIndex: number) => void;
   pauseSession: () => Promise<void>;
   resumeSession: () => Promise<void>;
   discardSession: () => Promise<void>;
@@ -132,13 +133,15 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
       return;
     }
     try {
-      const updated = await sessionsApi.addExerciseToSession(id, {
+      await sessionsApi.addExerciseToSession(id, {
         exercise: exerciseId,
         order,
         notes,
         restSeconds,
       });
-      set({ activeSession: updated });
+      // POST returns unpopulated exercise refs — re-fetch to get full names
+      const fresh = await sessionsApi.getActiveSession();
+      set({ activeSession: fresh });
     } catch (err: any) {
       log.error('SessionStore', 'addExercise failed:', err);
       set({ error: err?.message ?? 'Failed to add exercise' });
@@ -152,8 +155,10 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
       return;
     }
     try {
-      const updated = await sessionsApi.removeExerciseFromSession(id, exerciseIndex);
-      set({ activeSession: updated });
+      await sessionsApi.removeExerciseFromSession(id, exerciseIndex);
+      // DELETE returns unpopulated exercise refs — re-fetch to get full names
+      const fresh = await sessionsApi.getActiveSession();
+      set({ activeSession: fresh });
     } catch (err: any) {
       log.error('SessionStore', 'removeExercise failed (index=%d):', exerciseIndex, err);
       set({ error: err?.message ?? 'Failed to remove exercise' });
@@ -191,6 +196,15 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
       set({ error: err?.message ?? 'Failed to undo set' });
       throw err;
     }
+  },
+
+  reorderExercise: (fromIndex, toIndex) => {
+    const { activeSession } = get();
+    if (!activeSession) return;
+    const exercises = [...activeSession.exercises];
+    const [moved] = exercises.splice(fromIndex, 1);
+    exercises.splice(toIndex, 0, moved);
+    set({ activeSession: { ...activeSession, exercises } });
   },
 
   pauseSession: async () => {

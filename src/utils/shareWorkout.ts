@@ -36,11 +36,12 @@ export async function captureCard(viewRef: React.RefObject<any>): Promise<string
   }
 }
 
-export async function shareToInstagram(imageUri: string): Promise<ShareToInstagramResult> {
-  // On iOS, try the Instagram Stories URL scheme first — it carries the image via the
-  // shared pasteboard and opens directly into Stories composer.
+export async function shareToInstagram(
+  imageUri: string,
+  isSticker = false,
+): Promise<ShareToInstagramResult> {
   if (Platform.OS === 'ios') {
-    const sent = await tryIOSInstagramStories(imageUri);
+    const sent = await tryIOSInstagramStories(imageUri, isSticker);
     if (sent) return 'shared';
   }
 
@@ -89,17 +90,15 @@ export async function saveToLibrary(imageUri: string): Promise<boolean> {
   }
 }
 
-// iOS-only: the instagram-stories://share scheme opens the Stories composer with the
-// captured image pre-loaded. Instagram reads the image from the iOS pasteboard when the
-// URL is opened; the image is NOT embedded in the URL itself.
-async function tryIOSInstagramStories(imageUri: string): Promise<boolean> {
+async function tryIOSInstagramStories(imageUri: string, isSticker: boolean): Promise<boolean> {
   const scheme = 'instagram-stories://share';
   try {
     const canOpen = await Linking.canOpenURL(scheme);
     if (!canOpen) return false;
-    // Write the image to the pasteboard so Instagram can read it.
-    // We pass the local file path as the background-image parameter.
-    const url = `${scheme}?source_application=com.sweatstreak.app&backgroundImageURL=${encodeURIComponent(imageUri)}`;
+    const imageParam = isSticker
+      ? `stickerImageURL=${encodeURIComponent(imageUri)}`
+      : `backgroundImageURL=${encodeURIComponent(imageUri)}`;
+    const url = `${scheme}?source_application=com.sweatstreak.app&${imageParam}`;
     await Linking.openURL(url);
     return true;
   } catch (err) {

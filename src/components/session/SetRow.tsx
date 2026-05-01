@@ -26,7 +26,7 @@ interface Props {
   trackingType: 'reps' | 'time' | 'distance';
   suggestedWeight?: number | null;
   suggestedReps?: number | null;
-  onComplete: (data: LogSetData) => void;
+  onComplete: (data: LogSetData) => Promise<void>;
   onRemove?: () => void;
   onUnlog?: () => void;
   onOpenCalculator?: (weight: number) => void;
@@ -143,12 +143,13 @@ export default function SetRow({
   const checkScale = useRef(new Animated.Value(1)).current;
   const rowOpacity = useRef(new Animated.Value(isCompleted ? 1 : 0)).current;
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isCompleted) {
       if (weight === '' && suggestedWeight != null) setWeight(String(suggestedWeight));
       if (reps === '' && suggestedReps != null) setReps(String(suggestedReps));
     }
-  }, [isCompleted, reps, suggestedReps, suggestedWeight, weight]);
+  }, []);
 
   useEffect(() => {
     if (isCompleted) {
@@ -203,7 +204,7 @@ export default function SetRow({
     return {};
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (isCompleted || isCompleting || isUpcoming) return;
     const data = validate();
     if (!data) {
@@ -225,7 +226,11 @@ export default function SetRow({
         bounciness: 0,
       }),
     ]).start();
-    onComplete(data);
+    try {
+      await onComplete(data);
+    } catch {
+      setError('Could not save set. Try again.');
+    }
   };
 
   if (isCompleted && set) {
@@ -587,7 +592,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: 12,
-    overflow: 'hidden',
   },
   pillFull: {
     flex: 2,

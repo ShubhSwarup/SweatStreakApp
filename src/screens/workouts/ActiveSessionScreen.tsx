@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,7 @@ export default function ActiveSessionScreen({
     removeExercise,
     removePendingSet,
     unlogCompletedSet,
+    reorderExercise,
     finishSession,
     pauseSession,
     discardSession,
@@ -50,8 +51,6 @@ export default function ActiveSessionScreen({
   const { openOverlay, setPostSessionData, setPostSessionQueue, advancePostSessionQueue } =
     useUIStore();
   const user = useAuthStore(s => s.user);
-
-  const prevStatusRef = useRef<string | null>(null);
 
   const [leaveDialogVisible, setLeaveDialogVisible] = useState(false);
   const [finishDialogVisible, setFinishDialogVisible] = useState(false);
@@ -74,14 +73,6 @@ export default function ActiveSessionScreen({
     }
   }, [fetchedOnce, activeSession, navigation]);
 
-  // Navigate to hub when session transitions to paused
-  useEffect(() => {
-    const status = activeSession?.status ?? null;
-    if (prevStatusRef.current === 'active' && status === 'paused') {
-      navigation.navigate('WorkoutHub');
-    }
-    prevStatusRef.current = status;
-  }, [activeSession?.status]);
 
   // Block Android hardware back — show leave dialog instead
   useFocusEffect(
@@ -98,10 +89,9 @@ export default function ActiveSessionScreen({
     setLeaveDialogVisible(false);
     try {
       await pauseSession();
-      // status-change effect handles navigation
     } catch (err) {
       log.error('ActiveSession', 'pause failed:', err);
-      // Navigate away anyway so the user isn't trapped
+    } finally {
       navigation.navigate('WorkoutHub');
     }
   }, [pauseSession, navigation]);
@@ -120,15 +110,10 @@ export default function ActiveSessionScreen({
 
   const handleLogSet = useCallback(
     async (exerciseIndex: number, data: LogSetData) => {
-      try {
-        await logSet(exerciseIndex, data);
-        const restSeconds =
-          activeSession?.exercises[exerciseIndex]?.restSeconds ?? 90;
-        openOverlay('restTimer', { restSeconds });
-      } catch (err) {
-        log.error('ActiveSession', 'logSet failed:', err);
-        Alert.alert('Error', 'Failed to log set. Please try again.');
-      }
+      await logSet(exerciseIndex, data);
+      const restSeconds =
+        activeSession?.exercises[exerciseIndex]?.restSeconds ?? 90;
+      openOverlay('restTimer', { restSeconds });
     },
     [logSet, openOverlay, activeSession],
   );
@@ -219,6 +204,7 @@ export default function ActiveSessionScreen({
     setPostSessionData,
     setPostSessionQueue,
     advancePostSessionQueue,
+    navigation,
   ]);
 
   if (!fetchedOnce || isLoading || !activeSession) {
@@ -298,6 +284,8 @@ export default function ActiveSessionScreen({
             onRemove={handleRemoveExercise}
             onRemovePendingSet={(setNumber) => removePendingSet(idx, setNumber)}
             onUnlogCompletedSet={(setNumber) => unlogCompletedSet(idx, setNumber)}
+            onMoveUp={idx > 0 ? () => reorderExercise(idx, idx - 1) : undefined}
+            onMoveDown={idx < activeSession.exercises.length - 1 ? () => reorderExercise(idx, idx + 1) : undefined}
           />
         ))}
 
@@ -579,4 +567,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.onPrimary,
   },
+
 });

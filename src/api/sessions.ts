@@ -7,12 +7,15 @@ function normalizeSession(raw: any): ActiveSession {
   const session = { ...raw };
   if (!session.id && session._id) session.id = String(session._id);
   if (Array.isArray(session.exercises)) {
-    session.exercises = session.exercises.map((ex: any) => ({
-      ...ex,
-      exerciseId: ex.exerciseId ?? ex.exercise ?? ex._id ?? '',
-      name: ex.name ?? ex.exerciseName ?? '',
-      sets: Array.isArray(ex.sets) ? ex.sets : [],
-    }));
+    session.exercises = session.exercises.map((ex: any) => {
+      const exObj = typeof ex.exercise === 'object' && ex.exercise !== null ? ex.exercise : null;
+      return {
+        ...ex,
+        exerciseId: ex.exerciseId ?? exObj?._id ?? (typeof ex.exercise === 'string' ? ex.exercise : '') ?? ex._id ?? '',
+        name: ex.name ?? ex.exerciseName ?? exObj?.name ?? '',
+        sets: Array.isArray(ex.sets) ? ex.sets : [],
+      };
+    });
   }
   return session as ActiveSession;
 }
